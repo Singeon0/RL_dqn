@@ -5,4 +5,4 @@ cleanrl/utah_test_set.h5
 .idea/
 cleanrl/runs/
 /cleanrl/__pycache__
-PyGeM/
+cleanrl/synthetic_dataset.h5
