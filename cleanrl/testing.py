@@ -1,6 +1,6 @@
 import unittest
 import numpy as np
-from dqn import transform_array, explore_shape, extract_shape_positions, MedicalImageSegmentationEnv
+from dqn import transform_array, MedicalImageSegmentationEnv
 
 
 class TestTransformArray(unittest.TestCase):
