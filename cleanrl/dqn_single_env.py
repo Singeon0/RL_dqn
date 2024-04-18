@@ -442,6 +442,13 @@ def batch_box_space(space, n):
 
 
 if __name__ == "__main__":
+
+    data_path = "synthetic_dataset.h5"
+    num_control_points = 9
+    max_iter = 1000
+    iou_threshold = 0.9
+
+
     import stable_baselines3 as sb3
 
     if sb3.__version__ < "2.0":
@@ -482,9 +489,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     # Create a single environment
     env = make_env(args.env_id, args.seed, 0, args.capture_video, run_name,
                    data_path="utah_test_set.h5",
-                   num_control_points=9,
-                   max_iter=1000,
-                   iou_threshold=0.9)()
+                   num_control_points=num_control_points,
+                   max_iter=max_iter,
+                   iou_threshold=iou_threshold)()
 
     # Create an instance of the QNetwork with the custom environment
     q_network = QNetwork(env).to(device)
@@ -572,9 +579,9 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             device=device,
             epsilon=0.05,
             data_path="utah_test_set.h5",
-            num_control_points=16,
-            max_iter=100,
-            iou_threshold=0.9,
+            num_control_points=num_control_points,
+            max_iter=max_iter,
+            iou_threshold=0.9
         )
 
         for idx, episodic_return in enumerate(episodic_returns):
