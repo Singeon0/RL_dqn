@@ -109,10 +109,11 @@ def process_mask(data, img_size):
 
         # Check if indices are within the bounds
         if not np.max(indices_0) < shape_img.shape[0] and np.max(indices_1) < shape_img.shape[1]:
-            print("Indices are out of bounds of the array shape_img.")
+            # print("Indices are out of bounds of the array shape_img.")
             temp = []
             for j in range(len(indices_0)):
-                if 0 <= new_shape_int[0][j] < (shape_img.shape[0] - 1) and 0 <= new_shape_int[1][j] < (shape_img.shape[1] - 1):
+                if 0 <= new_shape_int[0][j] < (shape_img.shape[0] - 1) and 0 <= new_shape_int[1][j] < (
+                        shape_img.shape[1] - 1):
                     # adding the element corresponding as the index as a tuple in temp
                     temp.append((indices_0[j], indices_1[j]))
             # converting the list of tuples to a numpy array of shape (2, len(temp))
@@ -120,13 +121,17 @@ def process_mask(data, img_size):
 
         # handle IndexError
         try:
-            shape_img[new_shape_int[0].astype(int), new_shape_int[1].astype(int)] = 1
+            if new_shape_int.size > 0:  # Check if new_shape_int is not empty
+                shape_img[new_shape_int[0].astype(int), new_shape_int[1].astype(int)] = 1
+            else:
+                return np.zeros(img_size, dtype=np.float32)
         except IndexError:
-            print('PROBLEM')
+            # print('PROBLEM')
             temp = []
-            print(f'SHAPE new_shape_int: {new_shape_int.shape}\nnew_shape_int: {new_shape_int}')
+            # print(f'SHAPE new_shape_int: {new_shape_int.shape}\nnew_shape_int: {new_shape_int}')
             for j in range(len(new_shape_int[0])):
-                if 0 <= new_shape_int[0][j] < (shape_img.shape[0] - 1) and 0 <= new_shape_int[1][j] < (shape_img.shape[1] - 1):
+                if 0 <= new_shape_int[0][j] < (shape_img.shape[0] - 1) and 0 <= new_shape_int[1][j] < (
+                        shape_img.shape[1] - 1):
                     # adding the element corresponding as the index as a tuple in temp
                     temp.append((indices_0[j], indices_1[j]))
             # converting the list of tuples to a numpy array of shape (2, len(temp))

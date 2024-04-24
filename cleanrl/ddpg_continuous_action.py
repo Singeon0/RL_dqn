@@ -45,7 +45,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
     """the environment id of the Atari game"""
-    total_timesteps: int = 100
+    total_timesteps: int = 10
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -179,8 +179,6 @@ if __name__ == "__main__":
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
 
-        print(f'terminated: {terminated}, truncated: {truncated}')
-
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in info:
             print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
@@ -224,7 +222,7 @@ if __name__ == "__main__":
                 for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-            if global_step % 100 == 0:
+            if global_step % 100 == 0:  # TODO i don"t enter in this loop ??
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                 writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
