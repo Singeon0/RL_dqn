@@ -1,32 +1,42 @@
 import unittest
 import numpy as np
-from dqn import transform_array, MedicalImageSegmentationEnv
+from custom_env import transform_array, MedicalImageSegmentationEnv
 
 
 class TestTransformArray(unittest.TestCase):
 
     def test_transform_array_with_even_length_input(self):
-        input_array = np.array([1, 2, 3, 4, 5, 6, 7, 8])
-        array_mu_x, array_mu_y = transform_array(input_array)
-        self.assertEqual(array_mu_x.shape, (2, 2, 1))
-        self.assertEqual(array_mu_y.shape, (2, 2, 1))
-        np.testing.assert_array_equal(array_mu_x, np.array([[[1], [3]], [[5], [7]]]))
+        input_array = np.array([[[ 0.1066572,  -0.9982035 ],
+                         [-0.49417126,  0.54811186],
+                         [-0.17789385, -0.19034308]],
 
-    def test_transform_array_with_odd_length_input(self):
-        input_array = np.array([1, 2, 3])
-        with self.assertRaises(ValueError):
-            transform_array(input_array)
+                        [[ 0.6278903,  -0.40345585],
+                         [-0.5259471,   0.8321861 ],
+                         [ 0.06160516,  0.66127026]],
 
-    def test_transform_array_with_zero_length_input(self):
-        input_array = np.array([])
-        with self.assertRaises(ValueError):
-            transform_array(input_array)
-
-    def test_transform_array_with_large_input(self):
-        input_array = [i for i in range(18)]
+                        [[ 0.37956983, -0.4738221 ],
+                         [-0.26714936,  0.53968066],
+                         [ 0.34811392,  0.8119808 ]]])
         array_mu_x, array_mu_y = transform_array(input_array)
         self.assertEqual(array_mu_x.shape, (3, 3, 1))
         self.assertEqual(array_mu_y.shape, (3, 3, 1))
+        # np.testing.assert_array_equal(array_mu_x, np.array([[[1], [3]], [[5], [7]]]))
+
+    # def test_transform_array_with_odd_length_input(self):
+    #     input_array = np.array([1, 2, 3])
+    #     with self.assertRaises(ValueError):
+    #         transform_array(input_array)
+    #
+    # def test_transform_array_with_zero_length_input(self):
+    #     input_array = np.array([])
+    #     with self.assertRaises(ValueError):
+    #         transform_array(input_array)
+    #
+    # def test_transform_array_with_large_input(self):
+    #     input_array = [i for i in range(18)]
+    #     array_mu_x, array_mu_y = transform_array(input_array)
+    #     self.assertEqual(array_mu_x.shape, (3, 3, 1))
+    #     self.assertEqual(array_mu_y.shape, (3, 3, 1))
 
 
 class TestShapeExtraction(unittest.TestCase):

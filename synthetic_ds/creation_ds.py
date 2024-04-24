@@ -4,7 +4,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 # Set the dimensions and number of images
-image_size = (100, 100)
+image_size = (640, 640)
 num_images = 100
 
 # Create empty arrays to store the images
@@ -20,11 +20,11 @@ for i in range(num_images):
     # Prediction images: Central circle occupying 10% of the image area
     circle_radius = int(np.sqrt(0.1 * image_size[0] * image_size[1] / np.pi))
     circle_center = (image_size[0] // 2, image_size[1] // 2)
-    prediction_images[i] = cv2.circle(np.zeros(image_size, dtype=np.uint8), circle_center, circle_radius, 255, -1)
+    prediction_images[i] = cv2.circle(np.zeros(image_size, dtype=np.uint8), circle_center, circle_radius, 1, -1)
 
     # Ground truth images: Circle that is 10% larger than the prediction circle
     groundtruth_radius = int(circle_radius * 1.1)  # Increase the radius by 10%
-    groundtruth_images[i] = cv2.circle(np.zeros(image_size, dtype=np.uint8), circle_center, groundtruth_radius, 255, -1)
+    groundtruth_images[i] = cv2.circle(np.zeros(image_size, dtype=np.uint8), circle_center, groundtruth_radius, 1, -1)
 # Save the images to an HDF5 file
 with h5py.File('synthetic_dataset.h5', 'w') as hdf:
     hdf.create_dataset('image', data=data_images)

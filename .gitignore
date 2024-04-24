@@ -8,3 +8,4 @@ cleanrl/runs/
 cleanrl/synthetic_dataset.h5
 /PyGeM
 cleanrl/synthetic_dataset.h5
+synthetic_ds/synthetic_dataset.h5
