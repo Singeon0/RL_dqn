@@ -1,8 +1,8 @@
 def dqn():
-    import cleanrl.dqn
+    import cleanrl.trash.dqn
     import cleanrl_utils.evals.dqn_eval
 
-    return cleanrl.dqn.QNetwork, cleanrl.dqn.make_env, cleanrl_utils.evals.dqn_eval.evaluate
+    return cleanrl.trash.dqn.QNetwork, cleanrl.trash.dqn.make_env, cleanrl_utils.evals.dqn_eval.evaluate
 
 
 def dqn_atari():

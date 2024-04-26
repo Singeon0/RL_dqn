@@ -45,11 +45,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
     """the environment id of the Atari game"""
-    total_timesteps: int = 10
+    total_timesteps: int = 1000
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(1e6)
+    buffer_size: int = int(1e3)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -110,10 +110,10 @@ class Actor(nn.Module):  # TODO : implement the same architecture as the one in 
         return x * self.action_scale + self.action_bias
 
 if __name__ == "__main__":
-    data_path = '../synthetic_ds/synthetic_dataset.h5'
+    data_path = '..\synthetic_ds\synthetic_dataset.h5'
     num_control_points = 16
-    max_iter = 10
-    iou_threshold = 0.9
+    max_iter = 100
+    iou_threshold = 0.8
 
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -142,6 +142,8 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+
+    print(f"Device: {device}")
 
     # env setup
     env = make_env(data_path, num_control_points, max_iter, iou_threshold)()

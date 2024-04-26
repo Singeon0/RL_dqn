@@ -4,7 +4,7 @@ import warnings
 import cv2
 import gymnasium as gym
 from collections import Counter
-from scipy.ndimage import binary_closing
+from scipy.ndimage import binary_closing, zoom
 import h5py
 import matplotlib.pyplot as plt
 import numpy as np
@@ -81,7 +81,7 @@ def process_mask(data, img_size):
     new_shape_int = new_shape.astype(int)
     print(f'new_shape_int: {new_shape_int.shape}')
 
-    if new_shape_int.shape[1] > 1 :
+    if new_shape_int.shape[1] > 1:
 
         # Transpose the array and count duplicates
         arr = np.transpose(new_shape_int)
@@ -91,7 +91,7 @@ def process_mask(data, img_size):
 
         # Increase the size of the mask until there are no duplicates
         i = 1
-        while len(duplicates) > 0:
+        while len(duplicates) > 0 and i <= 10:
             new_shape_int = (new_shape*i).astype(int)
             arr = np.transpose(new_shape_int)
             tuples = [tuple(row) for row in arr]
@@ -140,7 +140,7 @@ def process_mask(data, img_size):
                 shape_img[new_shape_int[0].astype(int), new_shape_int[1].astype(int)] = 1
 
         # Apply morphological closing to close small gaps in the contours
-        closed_image = binary_closing(shape_img, structure=np.ones((3,3)))
+        closed_image = binary_closing(shape_img, structure=np.ones((3, 3)))
 
         # Resize the closed image to the original img_size
         resized_image = cv2.resize(closed_image.astype(float), (img_size[1], img_size[0]), interpolation=cv2.INTER_AREA)
@@ -166,6 +166,24 @@ def read_h5_dataset(h5_file_path):
     return images, predictions, groundtruths
 
 
+def resize_grayscale_image(image_array, upscale_factor=2):
+    """
+    Resizes a grayscale image represented as a NumPy array with shape values as 1 and background as 0.
+
+    :param image_array: NumPy array of the grayscale image.
+    :param upscale_factor: The factor by which to upscale the image.
+    :return: Resized NumPy array with doubled height and width.
+    """
+    # Apply the zoom and double the dimensions
+    resized_image = zoom(image_array, zoom=upscale_factor, order=0)  # order=0 means nearest-neighbor interpolation
+
+    # Clip values to ensure the image remains binary (0s and 1s)
+    resized_image = np.clip(resized_image, 0, 1)
+
+    return resized_image
+
+
+
 class MedicalImageSegmentationEnv(gym.Env):
     def __init__(self, data_path, num_control_points, max_iter, iou_threshold):
         super(MedicalImageSegmentationEnv, self).__init__()
@@ -185,11 +203,11 @@ class MedicalImageSegmentationEnv(gym.Env):
 
         plt.imshow(self.current_mask, cmap='gray')
         plt.title('initial mask')
-        plt.show()
+        # plt.show()
 
         plt.imshow(self.ground_truths[self.current_index], cmap='gray')
         plt.title('ground truth')
-        plt.show()
+        # plt.show()
 
         self.iteration = 0
         self.max_iterations = max_iter
@@ -287,8 +305,11 @@ class MedicalImageSegmentationEnv(gym.Env):
         # Reshape the action to match the expected shape of control points
         self.ffd.array_mu_x, self.ffd.array_mu_y = transform_array(action)
 
+        # upscale the mask
+        mask = resize_grayscale_image(self.current_mask, upscale_factor=2)
+
         # Apply the FFD transformation to the current mask
-        mask_coordinates = np.where(self.current_mask == 1)  # only keep position of the biggest shape
+        mask_coordinates = np.where(mask == 1)  # only keep position of the biggest shape
 
         # test = np.zeros(self.current_mask.shape, dtype=self.current_mask.dtype)
         # test[mask_coordinates[0].astype(int), mask_coordinates[1].astype(int)] = 1
@@ -296,17 +317,19 @@ class MedicalImageSegmentationEnv(gym.Env):
         # plt.title('test')
         # plt.show()
 
-        coordinate = np.transpose(
-            np.array([mask_coordinates[0], mask_coordinates[1], np.zeros(len(mask_coordinates[0]))]))
+        coordinate = np.transpose(np.array([mask_coordinates[0], mask_coordinates[1], np.zeros(len(mask_coordinates[0]))]))
 
-        new_shape = np.transpose(self.ffd(coordinate / np.shape(self.current_mask)[0]))
+        # TO SOLVE THE STUPID FFD BUG WHERE IF THE Z AXIS IS 0 IT DOESN'T WORK
+        coordinate[:, 2] = 1e-3
 
-        new_shape *= np.shape(self.current_mask)[0]
+        new_shape = np.transpose(self.ffd(coordinate / np.shape(mask)[0]))  # divide by the size of the mask upscaled to have pixels position between 0 and 1, its like putting pixel in an intermediate space
+
+        new_shape *= np.shape(self.current_mask)[0]  # multiply by the size of the mask to have the pixel position in the image space
 
         shape_img = process_mask(new_shape, self.current_mask.shape)
 
-        # plt.imshow(shape_img, cmap='gray')
-        # plt.title('new shape')
+        plt.imshow(shape_img, cmap='gray')
+        plt.title('new shape')
         # plt.show()
 
         return shape_img

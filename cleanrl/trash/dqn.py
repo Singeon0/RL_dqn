@@ -481,17 +481,17 @@ poetry run pip install "stable_baselines3==2.0.0a1"
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
 
     env = make_env(args.env_id, args.seed, 0, args.capture_video, run_name,
-               data_path="utah_test_set.h5",
-               num_control_points=16,
-               max_iter=100,
-               iou_threshold=0.9)()
+                   data_path="../utah_test_set.h5",
+                   num_control_points=16,
+                   max_iter=100,
+                   iou_threshold=0.9)()
 
     observation_space = batch_dict_space(env.observation_space, args.num_envs)
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
         [make_env(args.env_id, args.seed + i, i, args.capture_video, run_name,
-                  data_path="utah_test_set.h5",
+                  data_path="../utah_test_set.h5",
                   num_control_points=16,
                   max_iter=100,
                   iou_threshold=0.9) for i in range(args.num_envs)],
@@ -590,7 +590,7 @@ poetry run pip install "stable_baselines3==2.0.0a1"
             Model=QNetwork,
             device=device,
             epsilon=0.05,
-            data_path="utah_test_set.h5",
+            data_path="../utah_test_set.h5",
             num_control_points=16,
             max_iter=100,
             iou_threshold=0.9,
