@@ -49,7 +49,7 @@ def evaluate(
 if __name__ == "__main__":
     from huggingface_hub import hf_hub_download
 
-    from cleanrl.ddpg_continuous_action import Actor, QNetwork, make_env
+    from cleanrl.ddpg_continuous_action_images_segmentation import Actor, QNetwork, make_env
 
     model_path = hf_hub_download(
         repo_id="cleanrl/HalfCheetah-v4-ddpg_continuous_action-seed1", filename="ddpg_continuous_action.cleanrl_model"
