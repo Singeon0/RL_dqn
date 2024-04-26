@@ -290,7 +290,7 @@ class MedicalImageSegmentationEnv(gym.Env):
         total_pixels_ground_truth = np.sum(self.ground_truths[self.current_index])
 
         # Stop if the number of pixels in the mask is less than x% of the number of pixels in the ground truth
-        if total_pixels_mask < 0.1 * total_pixels_ground_truth:
+        if total_pixels_mask < 0.01 * total_pixels_ground_truth:
             return True
 
         # Check if the desired IoU threshold is achieved

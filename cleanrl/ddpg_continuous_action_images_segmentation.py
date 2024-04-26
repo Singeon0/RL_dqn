@@ -45,11 +45,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Hopper-v4"
     """the environment id of the Atari game"""
-    total_timesteps: int = 1000
+    total_timesteps: int = int(1e2)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(1e3)
+    buffer_size: int = int(1e2)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -59,7 +59,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = 25e3
+    learning_starts: int = 1e1
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -74,7 +74,7 @@ def make_env(data_path, num_control_points, max_iter, iou_threshold):
     return thunk
 
 # ALGO LOGIC: initialize agent here:
-class QNetwork(nn.Module):  # TODO : implement the same architecture as the one in the paper 'single agent'
+class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
         self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod() + np.prod(env.action_space.shape), 256)
@@ -82,37 +82,41 @@ class QNetwork(nn.Module):  # TODO : implement the same architecture as the one 
         self.fc3 = nn.Linear(256, 1)
 
     def forward(self, x, a):
+        x = x.view(-1, np.array(env.observation_space.shape).prod())  # Flatten the input
+        a = a.view(-1, np.prod(env.action_space.shape))  # Flatten the action
         x = torch.cat([x, a], 1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
         return x
-
-class Actor(nn.Module):  # TODO : implement the same architecture as the one in the paper 'single agent'
+    
+class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
         self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod(), 256)
         self.fc2 = nn.Linear(256, 256)
-        self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))
+        self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))  # Change here
         # action rescaling
         self.register_buffer(
-            "action_scale", torch.tensor((env.action_space.high - env.action_space.low) / 2.0, dtype=torch.float32)
+            "action_scale", torch.tensor(((env.action_space.high - env.action_space.low) / 2.0).reshape(-1), dtype=torch.float32)
         )
         self.register_buffer(
-            "action_bias", torch.tensor((env.action_space.high + env.action_space.low) / 2.0, dtype=torch.float32)
+            "action_bias", torch.tensor(((env.action_space.high + env.action_space.low) / 2.0).reshape(-1), dtype=torch.float32)
         )
 
     def forward(self, x):
+        x = x.view(-1, np.array(env.observation_space.shape).prod())  # Flatten the input
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = torch.tanh(self.fc_mu(x))
-        return x * self.action_scale + self.action_bias
+        x = torch.tanh(self.fc_mu(x)).view(-1, *env.action_space.shape)  # Reshape the output
+        return (x.view(-1, np.prod(env.action_space.shape)) * self.action_scale) + self.action_bias
+
 
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 16
     max_iter = 100
-    iou_threshold = 0.8
+    iou_threshold = 0.85
 
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -175,8 +179,8 @@ if __name__ == "__main__":
             with torch.no_grad():
                 action = actor(torch.Tensor(obs).to(device))
                 action += torch.normal(0, actor.action_scale * args.exploration_noise)
-                action = action.cpu().numpy().clip(env.action_space.low, env.action_space.high)
-
+                action = action.cpu().numpy().reshape(env.action_space.shape).clip(env.action_space.low,
+                                                                                   env.action_space.high)  # I MODIFY THAT
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
 
@@ -191,7 +195,7 @@ if __name__ == "__main__":
         if terminated or truncated:
             real_next_obs = info["final_observation"]
             rb.add(obs, real_next_obs, action, reward, terminated, info)  # I MODIFY THAT
-            next_obs, _ = env.reset()
+            next_obs, _ = env.reset()  # I MODIFY THAT
 
         # I MODIFY THAT
         else:
@@ -199,8 +203,6 @@ if __name__ == "__main__":
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
-        plt.imshow(obs, cmap='gray')
-        plt.show()
 
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
@@ -230,17 +232,33 @@ if __name__ == "__main__":
                 for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-            if global_step % 100 == 0:  # TODO i don"t enter in this loop ??
+            if global_step % 10 == 0:  # TODO i don"t enter in this loop ??
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                 writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
                 print("SPS:", int(global_step / (time.time() - start_time)))
                 writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
+
     if args.save_model:
         model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
         torch.save((actor.state_dict(), qf1.state_dict()), model_path)
         print(f"model saved to {model_path}")
+
+        from cleanrl_utils.evals.ddpg_eval import evaluate
+
+        episodic_returns = evaluate(
+            model_path,
+            make_env,
+            args.env_id,
+            eval_episodes=10,
+            run_name=f"{run_name}-eval",
+            Model=(Actor, QNetwork),
+            device=device,
+            exploration_noise=args.exploration_noise,
+        )
+        for idx, episodic_return in enumerate(episodic_returns):
+            writer.add_scalar("eval/episodic_return", episodic_return, idx)
 
     env.close()
     writer.close()
