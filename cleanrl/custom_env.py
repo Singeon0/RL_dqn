@@ -1,13 +1,13 @@
 import copy
 import warnings
 
-import cv2
 import gymnasium as gym
+import cv2
 from collections import Counter
 from scipy.ndimage import binary_closing, zoom
+import numpy as np
 import h5py
 import matplotlib.pyplot as plt
-import numpy as np
 from gymnasium  import spaces
 from pygem import FFD
 from sklearn.metrics import jaccard_score
@@ -15,8 +15,7 @@ from sklearn.metrics import jaccard_score
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
-def transform_array(input_array):  # TODO: check if this is the right way to do it because action came from  Box(low=-1, high=1, shape=(int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)), 2)
-
+def transform_array(input_array):
     array_mu_x = input_array[:, :, 0:1]
     array_mu_y = input_array[:, :, 1:2]
 
@@ -44,27 +43,14 @@ def apply_mask_to_image(image, mask, intensity=0.5):
     if mask.dtype != np.float32:
         mask = mask.astype(np.float32)
 
-    # plt.imshow(image, cmap='gray')
-    # plt.title('image')
-    # plt.show()
-    #
-
-    # plt.imshow(mask, cmap='gray')
-    # plt.title('mask')
-    # plt.show()
-
     alpha = intensity
     beta = (1.0 - alpha)
     combined = cv2.addWeighted(image, alpha, mask, beta, 0.0)
 
-    # plt.imshow(combined, cmap='gray')
-    # plt.title('combined')
-    # plt.show()
-
     return combined
 
 
-def process_mask(data, img_size):
+def process_mask(data, img_size=(640, 640)):
     """
     Process a mask to remove duplicates, close gaps, and resize to the original image size.
 
@@ -75,11 +61,9 @@ def process_mask(data, img_size):
     Returns:
     np.array: The processed mask, resized to the original image size.
     """
-
     # Delete data in the z axis
     new_shape = np.delete(data, 2, axis=0)
     new_shape_int = new_shape.astype(int)
-    print(f'new_shape_int: {new_shape_int.shape}')
 
     if new_shape_int.shape[1] > 1:
 
@@ -91,7 +75,7 @@ def process_mask(data, img_size):
 
         # Increase the size of the mask until there are no duplicates
         i = 1
-        while len(duplicates) > 0 and i <= 10:
+        while len(duplicates) > 0 and i <= 10:  # Limit the number of iterations to prevent infinite loops and crashes
             new_shape_int = (new_shape*i).astype(int)
             arr = np.transpose(new_shape_int)
             tuples = [tuple(row) for row in arr]
@@ -104,40 +88,12 @@ def process_mask(data, img_size):
         shape_img = np.zeros(new_size, dtype=np.float32)
 
         # Ensure the indices are within the bounds of the array
-        indices_0 = new_shape_int[0].astype(int)
-        indices_1 = new_shape_int[1].astype(int)
+        x = new_shape_int[0]  # x coordinates
+        y = new_shape_int[1]  # y coordinates
 
-        # Check if indices are within the bounds
-        if not np.max(indices_0) < shape_img.shape[0] and np.max(indices_1) < shape_img.shape[1]:
-            # print("Indices are out of bounds of the array shape_img.")
-            temp = []
-            for j in range(len(indices_0)):
-                if 0 <= new_shape_int[0][j] < (shape_img.shape[0] - 1) and 0 <= new_shape_int[1][j] < (
-                        shape_img.shape[1] - 1):
-                    # adding the element corresponding as the index as a tuple in temp
-                    temp.append((indices_0[j], indices_1[j]))
-            # converting the list of tuples to a numpy array of shape (2, len(temp))
-            new_shape_int = np.array(temp).T
-
-        # handle IndexError
-        try:
-            if new_shape_int.size > 0:  # Check if new_shape_int is not empty
-                shape_img[new_shape_int[0].astype(int), new_shape_int[1].astype(int)] = 1
-            else:
-                return np.zeros(img_size, dtype=np.float32)
-        except IndexError:
-            # print('PROBLEM')
-            temp = []
-            # print(f'SHAPE new_shape_int: {new_shape_int.shape}\nnew_shape_int: {new_shape_int}')
-            for j in range(len(new_shape_int[0])):
-                if 0 <= new_shape_int[0][j] < (shape_img.shape[0] - 1) and 0 <= new_shape_int[1][j] < (
-                        shape_img.shape[1] - 1):
-                    # adding the element corresponding as the index as a tuple in temp
-                    temp.append((indices_0[j], indices_1[j]))
-            # converting the list of tuples to a numpy array of shape (2, len(temp))
-            new_shape_int = np.array(temp).T
-            if len(temp) > 0:
-                shape_img[new_shape_int[0].astype(int), new_shape_int[1].astype(int)] = 1
+        for i in range(len(x)):
+            if 0 <= x[i] < new_size[0] and 0 <= y[i] < new_size[1]:
+                shape_img[x[i], y[i]] = 1
 
         # Apply morphological closing to close small gaps in the contours
         closed_image = binary_closing(shape_img, structure=np.ones((3, 3)))
@@ -200,14 +156,6 @@ class MedicalImageSegmentationEnv(gym.Env):
         self.current_index = 0
 
         self.current_mask = copy.deepcopy(self.initial_masks[self.current_index])
-
-        plt.imshow(self.current_mask, cmap='gray')
-        plt.title('initial mask')
-        # plt.show()
-
-        plt.imshow(self.ground_truths[self.current_index], cmap='gray')
-        plt.title('ground truth')
-        # plt.show()
 
         self.iteration = 0
         self.max_iterations = max_iter
@@ -306,16 +254,12 @@ class MedicalImageSegmentationEnv(gym.Env):
         self.ffd.array_mu_x, self.ffd.array_mu_y = transform_array(action)
 
         # upscale the mask
-        mask = resize_grayscale_image(self.current_mask, upscale_factor=2)
+        # mask = resize_grayscale_image(self.current_mask, upscale_factor=2)  # TODO : actually upscale the mask create a problem of position of the mask ; it will be necessary only if the size of the mask increase drastically, so if parameters in action space are big
+
+        mask = copy.deepcopy(self.current_mask)
 
         # Apply the FFD transformation to the current mask
         mask_coordinates = np.where(mask == 1)  # only keep position of the biggest shape
-
-        # test = np.zeros(self.current_mask.shape, dtype=self.current_mask.dtype)
-        # test[mask_coordinates[0].astype(int), mask_coordinates[1].astype(int)] = 1
-        # plt.imshow(test, cmap='viridis')
-        # plt.title('test')
-        # plt.show()
 
         coordinate = np.transpose(np.array([mask_coordinates[0], mask_coordinates[1], np.zeros(len(mask_coordinates[0]))]))
 
@@ -327,10 +271,6 @@ class MedicalImageSegmentationEnv(gym.Env):
         new_shape *= np.shape(self.current_mask)[0]  # multiply by the size of the mask to have the pixel position in the image space
 
         shape_img = process_mask(new_shape, self.current_mask.shape)
-
-        plt.imshow(shape_img, cmap='gray')
-        plt.title('new shape')
-        # plt.show()
 
         return shape_img
 
@@ -350,7 +290,7 @@ class MedicalImageSegmentationEnv(gym.Env):
         total_pixels_ground_truth = np.sum(self.ground_truths[self.current_index])
 
         # Stop if the number of pixels in the mask is less than x% of the number of pixels in the ground truth
-        if total_pixels_mask < 0.15 * total_pixels_ground_truth:
+        if total_pixels_mask < 0.1 * total_pixels_ground_truth:
             return True
 
         # Check if the desired IoU threshold is achieved

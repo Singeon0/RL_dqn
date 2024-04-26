@@ -18,12 +18,9 @@ import random
 # for _ in range(10):
 n_control_points = 16
 env = MedicalImageSegmentationEnv('../synthetic_ds/synthetic_dataset.h5', n_control_points, 10, 0.5)
-action = [random.uniform(-0.5, 0.5) for _ in range(2*n_control_points)]
-action2 = [0 for _ in range(2*n_control_points)]
-# action3 is also a random action array but following a gaussian distribution center in 0 and std 1
 # Define the shape of the action space
 shape = (int(np.sqrt(n_control_points)), int(np.sqrt(n_control_points)), 2)
-sample = np.random.uniform(low=-10, high=10, size=shape)
+sample = np.random.uniform(low=-1, high=1, size=shape)
 print(f'sample = {sample}')
 
 # Generate a random sample from the action space

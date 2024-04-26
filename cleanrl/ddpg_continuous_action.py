@@ -15,7 +15,7 @@ import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 from custom_env import MedicalImageSegmentationEnv
-
+from pathlib import Path
 
 @dataclass
 class Args:
@@ -70,7 +70,6 @@ class Args:
 def make_env(data_path, num_control_points, max_iter, iou_threshold):
     def thunk():
         env = MedicalImageSegmentationEnv(data_path, num_control_points, max_iter, iou_threshold)
-        # env = ResizeObservation(env, (84, 84))
         return env
     return thunk
 
@@ -110,7 +109,7 @@ class Actor(nn.Module):  # TODO : implement the same architecture as the one in 
         return x * self.action_scale + self.action_bias
 
 if __name__ == "__main__":
-    data_path = '..\synthetic_ds\synthetic_dataset.h5'
+    data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 16
     max_iter = 100
     iou_threshold = 0.8
@@ -191,10 +190,17 @@ if __name__ == "__main__":
         real_next_obs = next_obs.copy()
         if terminated or truncated:
             real_next_obs = info["final_observation"]
-        rb.add(obs, real_next_obs, action, reward, terminated, info)
+            rb.add(obs, real_next_obs, action, reward, terminated, info)  # I MODIFY THAT
+            next_obs, _ = env.reset()
+
+        # I MODIFY THAT
+        else:
+            rb.add(obs, real_next_obs, action, reward, terminated, info)
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
+        plt.imshow(obs, cmap='gray')
+        plt.show()
 
         # ALGO LOGIC: training.
         if global_step > args.learning_starts:
