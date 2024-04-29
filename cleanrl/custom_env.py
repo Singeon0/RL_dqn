@@ -45,7 +45,7 @@ def apply_mask_to_image(image, mask, intensity=0.5):
 
     alpha = intensity
     beta = (1.0 - alpha)
-    combined = cv2.addWeighted(image, alpha, mask, beta, 0.0)
+    combined = cv2.addWeighted(image, alpha, mask*255, beta, 0.0)  # Multiply the mask by 255 to have the same scale as the image (mask is composed of 1 and 0)
 
     return combined
 
@@ -209,17 +209,17 @@ class MedicalImageSegmentationEnv(gym.Env):
         # Return the initial observation
         return self._get_observation(), {}
 
-    def _get_observation(self):
+    def _get_observation(self):  # TODO : maybe i should had the information if the mask get bigger or smaller ?
         # Apply the current mask to the MRI image
         observation = apply_mask_to_image(self.mri_images[self.current_index], self.current_mask)
         return observation
 
     def step(self, action):
         # Apply the action to deform the current mask using FFD
-        self.current_mask = self._apply_action(action)
+        self.current_mask = self._apply_action(action)  # TODO what append is the number of control points increase ? More the control points less the shape reduce in size ?
 
         # Compute the reward based on the improvement in IoU
-        reward = self._compute_reward()
+        reward = self._compute_reward()  # TODO change the way of calculate the reward because the reward it is always negative
 
         print(f'iteration: {self.iteration}, reward: {reward}, iou: {self._compute_iou(self.current_mask, self.ground_truths[self.current_index])}')
 
