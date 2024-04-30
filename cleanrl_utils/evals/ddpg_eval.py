@@ -39,8 +39,10 @@ def evaluate(
             done = terminated or truncated
             episode_return += reward
             obs = next_obs
+            env.reder()
 
         print(f"eval_episode={len(episodic_returns)}, episodic_return={episode_return}")
+        env.render()
         episodic_returns.append(episode_return)
 
     return episodic_returns

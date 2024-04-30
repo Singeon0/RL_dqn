@@ -81,7 +81,9 @@ def process_mask(data, img_size=(640, 640)):
             tuples = [tuple(row) for row in arr]
             counts = Counter(tuples)
             duplicates = {column: count for column, count in counts.items() if count > 1}
-            i += 1
+            if len(duplicates) > 0:
+                i += 1
+
 
         # Create a new image of the appropriate size and apply the mask
         new_size = img_size[0] * i, img_size[1] * i
@@ -91,15 +93,25 @@ def process_mask(data, img_size=(640, 640)):
         x = new_shape_int[0]  # x coordinates
         y = new_shape_int[1]  # y coordinates
 
-        for i in range(len(x)):
-            if 0 <= x[i] < new_size[0] and 0 <= y[i] < new_size[1]:
-                shape_img[x[i], y[i]] = 1
+        for j in range(len(x)):
+            if 0 <= x[j] < new_size[0] and 0 <= y[j] < new_size[1]:
+                shape_img[x[j], y[j]] = 1
 
         # Apply morphological closing to close small gaps in the contours
         closed_image = binary_closing(shape_img, structure=np.ones((3, 3)))
 
         # Resize the closed image to the original img_size
-        resized_image = cv2.resize(closed_image.astype(float), (img_size[1], img_size[0]), interpolation=cv2.INTER_AREA)
+        try:
+            resized_image = cv2.resize(closed_image.astype(float), (img_size[1], img_size[0]), interpolation=cv2.INTER_AREA)
+        except cv2.error:
+            print('ERROR')
+            print(new_shape_int)
+            print(img_size)
+            plt.imshow(shape_img, cmap='gray')
+            plt.title('Shape Image')
+            plt.show()
+
+        resized_image = binary_closing(resized_image, structure=np.ones((3, 3)))
 
         # Threshold the resized image to convert all positive values to 1 and keep zero as 0
         resized_image[resized_image > 0] = 1
@@ -166,7 +178,7 @@ class MedicalImageSegmentationEnv(gym.Env):
                         1])  # sqrt because i want a square grid
 
         # Define the action space
-        self.action_space = spaces.Box(low=-0.5, high=0.5, shape=(int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)), 2),
+        self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)), 2),
                                        dtype=np.float32)
         """
         # Example of how to access value of control points from the action array
@@ -221,7 +233,7 @@ class MedicalImageSegmentationEnv(gym.Env):
         # Compute the reward based on the improvement in IoU
         reward = self._compute_reward()  # TODO change the way of calculate the reward because the reward it is always negative
 
-        print(f'iteration: {self.iteration}, reward: {reward}, iou: {self._compute_iou(self.current_mask, self.ground_truths[self.current_index])}')
+        # print(f'iteration: {self.iteration}, reward: {reward}, iou: {self._compute_iou(self.current_mask, self.ground_truths[self.current_index])}')
 
         # Increment the iteration counter
         self.iteration += 1
@@ -277,10 +289,10 @@ class MedicalImageSegmentationEnv(gym.Env):
     def _compute_reward(self):
         # Compute the IoU between the deformed mask and the ground truth mask
         iou_deformed = self._compute_iou(self.current_mask, self.ground_truths[self.current_index])
-        iou_initial = self._compute_iou(self.initial_masks[self.current_index], self.ground_truths[self.current_index])
+        # iou_initial = self._compute_iou(self.initial_masks[self.current_index], self.ground_truths[self.current_index])
 
         # Compute the reward as the improvement in IoU
-        reward = iou_deformed - iou_initial
+        reward = iou_deformed ** 2  # TODO
 
         return reward
 
@@ -312,5 +324,44 @@ class MedicalImageSegmentationEnv(gym.Env):
         return iou
 
     def render(self, mode='human'):
-        # Placeholder for the render method
-        pass
+        if mode == 'human':
+            self._render_frame()
+        elif mode == 'rgb_array':
+            return self._render_frame(mode=mode)
+        else:
+            raise ValueError(f"Unsupported render mode: {mode}")
+
+    def _render_frame(self, mode='human'):
+        # Create a figure with three subplots
+        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+
+        # Display the MRI image
+        ax1.imshow(self.mri_images[self.current_index], cmap='gray')
+        ax1.set_title('MRI Image')
+        ax1.axis('off')
+
+        # Display the current mask
+        ax2.imshow(self.current_mask, cmap='gray')
+        ax2.set_title('Current Mask')
+        ax2.axis('off')
+
+        # Display the ground truth mask
+        ax3.imshow(self.ground_truths[self.current_index], cmap='gray')
+        ax3.set_title('Ground Truth')
+        ax3.axis('off')
+
+        # Adjust the spacing between subplots
+        plt.tight_layout()
+
+        if mode == 'human':
+            # Display the plot
+            plt.show(block=False)
+            plt.pause(0.1)
+            plt.close()
+        elif mode == 'rgb_array':
+            # Convert the plot to an RGB array
+            fig.canvas.draw()
+            image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            image_from_plot = image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
+            plt.close()
+            return image_from_plot

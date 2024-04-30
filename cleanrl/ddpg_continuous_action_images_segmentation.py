@@ -45,11 +45,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(1e2)
+    total_timesteps: int = int(1e3)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(1e2)
+    buffer_size: int = int(3e3)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -59,7 +59,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = 1e1
+    learning_starts: int = int(25e2)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -186,7 +186,6 @@ if __name__ == "__main__":
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in info:
-            print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
             writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
             writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
 
@@ -200,6 +199,8 @@ if __name__ == "__main__":
         # I MODIFY THAT
         else:
             rb.add(obs, real_next_obs, action, reward, terminated, info)
+            #if global_step % 10 == 0:
+                #env.render()
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
@@ -232,11 +233,10 @@ if __name__ == "__main__":
                 for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-            if global_step % 10 == 0:  # TODO i don"t enter in this loop ??
+            if global_step % 100 == 0:  # TODO i don"t enter in this loop ??
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                 writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
-                print("SPS:", int(global_step / (time.time() - start_time)))
                 writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
 
@@ -248,18 +248,16 @@ if __name__ == "__main__":
         from cleanrl_utils.evals.ddpg_eval import evaluate
 
         episodic_returns = evaluate(
-            model_path,
-            make_env,
-            args.env_id,
-            eval_episodes=10,
-            run_name=f"{run_name}-eval",
-            Model=(Actor, QNetwork),
-            device=device,
-            exploration_noise=args.exploration_noise,
-        )
+        model_path,
+        make_env(data_path, num_control_points, max_iter, iou_threshold),
+        eval_episodes=10,
+        run_name="eval",
+        Model=(Actor, QNetwork),
+        device="cpu",
+    )
         for idx, episodic_return in enumerate(episodic_returns):
-            print(f"Episodic return {idx}: {episodic_return}")
             writer.add_scalar("eval/episodic_return", episodic_return, idx)
+            print(f"eval_episode={idx}, episodic_return={episodic_return}")
 
     env.close()
     writer.close()
