@@ -23,7 +23,7 @@ for i in range(num_images):
     prediction_images[i] = cv2.circle(np.zeros(image_size, dtype=np.uint8), circle_center, circle_radius, 1, -1)
 
     # Ground truth images: Circle that is 10% larger than the prediction circle
-    groundtruth_radius = int(circle_radius * 1.1)  # Increase the radius by 10%
+    groundtruth_radius = int(circle_radius * 1.33)  # Increase the radius by 10%
     groundtruth_images[i] = cv2.circle(np.zeros(image_size, dtype=np.uint8), circle_center, groundtruth_radius, 1, -1)
 # Save the images to an HDF5 file
 with h5py.File('synthetic_dataset.h5', 'w') as hdf:

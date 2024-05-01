@@ -151,7 +151,6 @@ def resize_grayscale_image(image_array, upscale_factor=2):
     return resized_image
 
 
-
 class MedicalImageSegmentationEnv(gym.Env):
     def __init__(self, data_path, num_control_points, max_iter, iou_threshold):
         super(MedicalImageSegmentationEnv, self).__init__()
@@ -178,8 +177,8 @@ class MedicalImageSegmentationEnv(gym.Env):
                         1])  # sqrt because i want a square grid
 
         # Define the action space
-        self.action_space = spaces.Box(low=-0.1, high=0.1, shape=(int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)), 2),
-                                       dtype=np.float32)
+        self.action_space = spaces.Box(low=-0.125, high=0.125, shape=(int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)), 2),
+                                       dtype=np.float16)
         """
         # Example of how to access value of control points from the action array
         array_mu_x = self.action_space[:,:,0:1]
@@ -193,6 +192,7 @@ class MedicalImageSegmentationEnv(gym.Env):
 
         print(f"Observation space shape: {self.observation_space.shape}")
         print(f"Action space shape: {self.action_space.shape}")
+        self.render()
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
@@ -268,6 +268,17 @@ class MedicalImageSegmentationEnv(gym.Env):
         # Reshape the action to match the expected shape of control points
         self.ffd.array_mu_x, self.ffd.array_mu_y = transform_array(action)
 
+        #  OVERIDE FFD PARAM
+        if False:
+            self.ffd.array_mu_x[1, 1] = 0.09
+            self.ffd.array_mu_y[1, 1] = 0.09
+            self.ffd.array_mu_x[0, 0] = -0.09
+            self.ffd.array_mu_y[0, 0] = -0.09
+            self.ffd.array_mu_x[0, 1] = -0.09
+            self.ffd.array_mu_y[0, 1] = 0.09
+            self.ffd.array_mu_x[1, 0] = 0.09
+            self.ffd.array_mu_y[1, 0] = -0.09
+
         # upscale the mask
         # mask = resize_grayscale_image(self.current_mask, upscale_factor=2)  # TODO : actually upscale the mask create a problem of position of the mask ; it will be necessary only if the size of the mask increase drastically, so if parameters in action space are big
 
@@ -335,31 +346,30 @@ class MedicalImageSegmentationEnv(gym.Env):
             raise ValueError(f"Unsupported render mode: {mode}")
 
     def _render_frame(self, mode='human'):
-        # Create a figure with three subplots
-        fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(15, 5))
+        # Create a figure
+        fig, ax = plt.subplots(figsize=(5, 5))
 
-        # Display the MRI image
-        ax1.imshow(self.mri_images[self.current_index], cmap='gray')
-        ax1.set_title('MRI Image')
-        ax1.axis('off')
+        # Display the MRI image in grayscale
+        ax.imshow(self.mri_images[self.current_index], cmap='gray')
+        title = f'At it {self.iteration}, reward is {np.round(self._compute_reward(), 3)}'
+        ax.set_title(title)
+        ax.axis('off')
 
-        # Display the current mask
-        ax2.imshow(self.current_mask, cmap='gray')
-        ax2.set_title('Current Mask')
-        ax2.axis('off')
+        # Overlay the current mask in green
+        ax.imshow(np.ma.masked_where(self.current_mask == 0, self.current_mask), cmap='Greens', alpha=0.5)
 
-        # Display the ground truth mask
-        ax3.imshow(self.ground_truths[self.current_index], cmap='gray')
-        ax3.set_title('Ground Truth')
-        ax3.axis('off')
+        # Overlay the ground truth mask in red
+        ax.imshow(
+            np.ma.masked_where(self.ground_truths[self.current_index] == 0, self.ground_truths[self.current_index]),
+            cmap='Reds', alpha=0.5)
 
-        # Adjust the spacing between subplots
+        # Adjust the layout
         plt.tight_layout()
 
         if mode == 'human':
             # Display the plot
             plt.show(block=False)
-            plt.pause(0.1)
+            plt.pause(0.09)
             plt.close()
         elif mode == 'rgb_array':
             # Convert the plot to an RGB array
@@ -368,3 +378,4 @@ class MedicalImageSegmentationEnv(gym.Env):
             image_from_plot = image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
             plt.close()
             return image_from_plot
+

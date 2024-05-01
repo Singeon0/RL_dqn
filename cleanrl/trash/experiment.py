@@ -5,7 +5,7 @@ import numpy as np
 import cv2
 import matplotlib.pyplot as plt
 
-from custom_env import process_mask
+from cleanrl.custom_env import process_mask
 
 # Load the data
 data_path = "../utah_test_set.h5"
