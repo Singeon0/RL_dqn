@@ -47,11 +47,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(1e3)
+    total_timesteps: int = int(1e2)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(3e3)
+    buffer_size: int = int(3e1)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -61,7 +61,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(25e2)
+    learning_starts: int = int(0.5e2)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -123,8 +123,8 @@ class Actor(nn.Module):
 
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
-    num_control_points = 16
-    max_iter = 100
+    num_control_points = 4
+    max_iter = 4
     iou_threshold = 0.85
 
     args = tyro.cli(Args)
@@ -187,13 +187,14 @@ if __name__ == "__main__":
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            action = env.action_space.sample()
+            action = np.round(env.action_space.sample(), 3)
         else:
             with torch.no_grad():
                 action = actor(torch.Tensor(obs).to(device))
                 action += torch.normal(0, actor.action_scale * args.exploration_noise)
                 action = action.cpu().numpy().reshape(env.action_space.shape).clip(env.action_space.low,
                                                                                    env.action_space.high)  # I MODIFY THAT
+                action = np.round(action, 3)
                 print(f"Sampled action shape: {action.shape}")
 
         # TRY NOT TO MODIFY: execute the game and log data.
@@ -214,8 +215,6 @@ if __name__ == "__main__":
         # I MODIFY THAT
         else:
             rb.add(obs, real_next_obs, action, reward, terminated, info)
-            #if global_step % 10 == 0:
-                #env.render()
 
         # TRY NOT TO MODIFY: CRUCIAL step easy to overlook
         obs = next_obs
