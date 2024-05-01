@@ -39,7 +39,7 @@ def evaluate(
             done = terminated or truncated
             episode_return += reward
             obs = next_obs
-            env.reder()
+            env.render()
 
         print(f"eval_episode={len(episodic_returns)}, episodic_return={episode_return}")
         env.render()
@@ -57,7 +57,10 @@ if __name__ == "__main__":
     max_iter = 100
     iou_threshold = 0.85
 
-    model_path = "path/to/your/saved/model"
+    model_path = Path(
+        "runs/ddpg_continuous_action_images_segmentation__1__1714473083/ddpg_continuous_action_images_segmentation"
+        ".cleanrl_model")
+
     evaluate(
         model_path,
         make_env(data_path, num_control_points, max_iter, iou_threshold),
