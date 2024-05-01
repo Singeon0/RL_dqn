@@ -191,6 +191,9 @@ class MedicalImageSegmentationEnv(gym.Env):
                                             shape=(self.mri_images[0].shape[0], self.mri_images[0].shape[0], 1),
                                             dtype=np.float32)
 
+        print(f"Observation space shape: {self.observation_space.shape}")
+        print(f"Action space shape: {self.action_space.shape}")
+
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
         self.action_space.seed(seed)

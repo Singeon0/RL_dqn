@@ -16,6 +16,8 @@ from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 from custom_env import MedicalImageSegmentationEnv
 from pathlib import Path
+from torchsummary import summary
+
 
 @dataclass
 class Args:
@@ -83,11 +85,15 @@ class QNetwork(nn.Module):
 
     def forward(self, x, a):
         x = x.view(-1, np.array(env.observation_space.shape).prod())  # Flatten the input
+        print(f"Critic input shape: {x.shape}")
         a = a.view(-1, np.prod(env.action_space.shape))  # Flatten the action
+        print(f"Critic action shape: {a.shape}")
         x = torch.cat([x, a], 1)
+        print(f"Critic concatenated input shape: {x.shape}")
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
+        print(f"Critic output shape: {x.shape}")
         return x
     
 class Actor(nn.Module):
@@ -106,11 +112,14 @@ class Actor(nn.Module):
 
     def forward(self, x):
         x = x.view(-1, np.array(env.observation_space.shape).prod())  # Flatten the input
+        print(f"Actor input shape: {x.shape}")
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = torch.tanh(self.fc_mu(x)).view(-1, *env.action_space.shape)  # Reshape the output
-        return (x.view(-1, np.prod(env.action_space.shape)) * self.action_scale) + self.action_bias
-
+        print(f"Actor output shape before scaling: {x.shape}")
+        output = (x.view(-1, np.prod(env.action_space.shape)) * self.action_scale) + self.action_bias
+        print(f"Actor output shape after scaling: {output.shape}")
+        return output
 
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
@@ -160,6 +169,10 @@ if __name__ == "__main__":
     q_optimizer = optim.Adam(list(qf1.parameters()), lr=args.learning_rate)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
 
+    # architecture summary of the models
+    # summary(actor, (1, *env.observation_space.shape))
+    # summary(qf1, [(1, *env.observation_space.shape), (1, *env.action_space.shape)])
+
     rb = ReplayBuffer(
         args.buffer_size,
         env.observation_space,
@@ -181,6 +194,8 @@ if __name__ == "__main__":
                 action += torch.normal(0, actor.action_scale * args.exploration_noise)
                 action = action.cpu().numpy().reshape(env.action_space.shape).clip(env.action_space.low,
                                                                                    env.action_space.high)  # I MODIFY THAT
+                print(f"Sampled action shape: {action.shape}")
+
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
 
