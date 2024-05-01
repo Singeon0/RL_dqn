@@ -46,7 +46,8 @@ def apply_mask_to_image(image, mask, intensity=0.5):
     alpha = intensity
     beta = (1.0 - alpha)
     combined = cv2.addWeighted(image, alpha, mask*255, beta, 0.0)  # Multiply the mask by 255 to have the same scale as the image (mask is composed of 1 and 0)
-
+    # transform the combined image to uint8
+    combined = combined.astype(np.uint8)
     return combined
 
 
@@ -87,7 +88,7 @@ def process_mask(data, img_size=(640, 640)):
 
         # Create a new image of the appropriate size and apply the mask
         new_size = img_size[0] * i, img_size[1] * i
-        shape_img = np.zeros(new_size, dtype=np.float32)
+        shape_img = np.zeros(new_size, dtype=np.uint8)
 
         # Ensure the indices are within the bounds of the array
         x = new_shape_int[0]  # x coordinates
@@ -117,7 +118,7 @@ def process_mask(data, img_size=(640, 640)):
         resized_image[resized_image > 0] = 1
 
     else:
-        shape_img = np.zeros(img_size, dtype=np.float32)
+        shape_img = np.zeros(img_size, dtype=np.uint8)
         resized_image = shape_img
 
     return resized_image
@@ -187,12 +188,11 @@ class MedicalImageSegmentationEnv(gym.Env):
 
         # Define the observation space
         self.observation_space = spaces.Box(low=0, high=255,
-                                            shape=(self.mri_images[0].shape[0], self.mri_images[0].shape[0], 1),
-                                            dtype=np.float32)
+                                            shape=(self.mri_images[0].shape[0], self.mri_images[0].shape[0], 3),  # Change the 1 to 3 bc the observation is composed of image, mask and ground truth
+                                            dtype=np.uint8)
 
         print(f"Observation space shape: {self.observation_space.shape}")
         print(f"Action space shape: {self.action_space.shape}")
-        self.render()
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
@@ -226,8 +226,15 @@ class MedicalImageSegmentationEnv(gym.Env):
 
     def _get_observation(self):  # TODO : maybe i should had the information if the mask get bigger or smaller ?
         # Apply the current mask to the MRI image
-        observation = apply_mask_to_image(self.mri_images[self.current_index], self.current_mask)
+        observation = np.dstack((self.mri_images[self.current_index], self.current_mask, self.ground_truths[self.current_index]))
+        """
+        # Assuming 'observation' is your stacked numpy array
+        mri_image = observation[:, :, 0]
+        current_mask = observation[:, :, 1]
+        ground_truth = observation[:, :, 2]
+        """
         return observation
+
 
     def step(self, action):
         # Apply the action to deform the current mask using FFD

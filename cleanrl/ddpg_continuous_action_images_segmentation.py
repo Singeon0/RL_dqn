@@ -47,7 +47,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(1e2)
+    total_timesteps: int = int(1e1)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -61,7 +61,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(0.5e2)
+    learning_starts: int = int(0.5e1)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -79,29 +79,48 @@ def make_env(data_path, num_control_points, max_iter, iou_threshold):
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod() + np.prod(env.action_space.shape), 256)
+        self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.fc1 = nn.Linear(64 * env.observation_space.shape[0] * env.observation_space.shape[1] + np.prod(env.action_space.shape), 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
 
-    def forward(self, x, a):
-        x = x.view(-1, np.array(env.observation_space.shape).prod())  # Flatten the input
-        print(f"Critic input shape: {x.shape}")
-        a = a.view(-1, np.prod(env.action_space.shape))  # Flatten the action
-        print(f"Critic action shape: {a.shape}")
-        x = torch.cat([x, a], 1)
-        print(f"Critic concatenated input shape: {x.shape}")
+    def forward(self, obs, ground_truth, action):
+        # Extract image and ground truth from the stacked observation
+        image = obs[:, :, :, 0:1]  # Extract the first channel (image)
+        ground_truth = ground_truth[:, :, :, 2:3]  # Extract the third channel (ground truth)
+
+        # Concatenate image and ground truth along the channel dimension
+        x = torch.cat([image, ground_truth], dim=3)
+
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.view(x.size(0), -1)
+
+        # Flatten the action tensor
+        action = action.view(action.size(0), -1)
+
+        # Concatenate the flattened feature maps and action
+        x = torch.cat([x, action], dim=1)
+
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
-        print(f"Critic output shape: {x.shape}")
         return x
-    
+
+
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.fc1 = nn.Linear(np.array(env.observation_space.shape).prod(), 256)
+        self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=1, padding=1)
+        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
+        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+        self.fc1 = nn.Linear(64 * env.observation_space.shape[0] * env.observation_space.shape[1], 256)
         self.fc2 = nn.Linear(256, 256)
-        self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))  # Change here
+        self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))
+
         # action rescaling
         self.register_buffer(
             "action_scale", torch.tensor(((env.action_space.high - env.action_space.low) / 2.0).reshape(-1), dtype=torch.float32)
@@ -111,15 +130,23 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
-        x = x.view(-1, np.array(env.observation_space.shape).prod())  # Flatten the input
-        print(f"Actor input shape: {x.shape}")
+        # Extract image and mask from the stacked observation
+        image = x[:, :, :, 0:1]  # Extract the first channel (image)
+        mask = x[:, :, :, 1:2]   # Extract the second channel (mask)
+
+        # Concatenate image and mask along the channel dimension
+        x = torch.cat([image, mask], dim=3)
+
+        x = F.relu(self.conv1(x))
+        x = F.relu(self.conv2(x))
+        x = F.relu(self.conv3(x))
+        x = x.view(x.size(0), -1)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
-        x = torch.tanh(self.fc_mu(x)).view(-1, *env.action_space.shape)  # Reshape the output
-        print(f"Actor output shape before scaling: {x.shape}")
+        x = torch.tanh(self.fc_mu(x)).view(-1, *env.action_space.shape)
         output = (x.view(-1, np.prod(env.action_space.shape)) * self.action_scale) + self.action_bias
-        print(f"Actor output shape after scaling: {output.shape}")
         return output
+
 
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
@@ -187,14 +214,14 @@ if __name__ == "__main__":
     for global_step in range(args.total_timesteps):
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            action = np.round(env.action_space.sample(), 3)
+            action = np.round(env.action_space.sample(), 2)
         else:
             with torch.no_grad():
                 action = actor(torch.Tensor(obs).to(device))
                 action += torch.normal(0, actor.action_scale * args.exploration_noise)
                 action = action.cpu().numpy().reshape(env.action_space.shape).clip(env.action_space.low,
                                                                                    env.action_space.high)  # I MODIFY THAT
-                action = np.round(action, 3)
+                action = np.round(action, 2)
                 print(f"Sampled action shape: {action.shape}")
 
         # TRY NOT TO MODIFY: execute the game and log data.
