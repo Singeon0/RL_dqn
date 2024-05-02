@@ -1,4 +1,5 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ddpg/#ddpg_continuous_actionpy
+import copy
 import os
 import random
 import time
@@ -47,11 +48,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(1e1)
+    total_timesteps: int = int(1e4)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(3e1)
+    buffer_size: int = int(3e4)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -61,7 +62,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(0.5e1)
+    learning_starts: int = int(25e2)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -86,20 +87,15 @@ class QNetwork(nn.Module):
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
 
-    def forward(self, obs, ground_truth, action):
-        # Extract image and ground truth from the stacked observation
-        image = obs[:, :, :, 0:1]  # Extract the first channel (image)
-        ground_truth = ground_truth[:, :, :, 2:3]  # Extract the third channel (ground truth)
-
-        # Concatenate image and ground truth along the channel dimension
-        x = torch.cat([image, ground_truth], dim=3)
-
+    def forward(self, x, action):
+        # x is now assumed to be the input tensor containing both image and ground truth data in shape [16, 2, 110, 110]
+        x = x.float()
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)  # Flatten the output for the fully connected layers
 
-        # Flatten the action tensor
+        # Flatten the action tensor if not already flat
         action = action.view(action.size(0), -1)
 
         # Concatenate the flattened feature maps and action
@@ -114,14 +110,18 @@ class QNetwork(nn.Module):
 class Actor(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=1, padding=1)
+        # Assuming env.observation_space.shape is (H, W, C)
+        input_channels = env.observation_space.shape[2] - 1  # Last dimension is channels AND -1 because i only use mask and image and not the ground truth
+        self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
+
+        # After convolutions, the spatial dimensions (H, W) remain unchanged due to padding
         self.fc1 = nn.Linear(64 * env.observation_space.shape[0] * env.observation_space.shape[1], 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))
 
-        # action rescaling
+        # Action rescaling buffers
         self.register_buffer(
             "action_scale", torch.tensor(((env.action_space.high - env.action_space.low) / 2.0).reshape(-1), dtype=torch.float32)
         )
@@ -130,21 +130,16 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
-        # Extract image and mask from the stacked observation
-        image = x[:, :, :, 0:1]  # Extract the first channel (image)
-        mask = x[:, :, :, 1:2]   # Extract the second channel (mask)
-
-        # Concatenate image and mask along the channel dimension
-        x = torch.cat([image, mask], dim=3)
-
+        x = x.float()
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = x.view(x.size(0), -1)
+        x = x.reshape(x.size(0), -1)  # Reshape the output for the fully connected layers
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = torch.tanh(self.fc_mu(x)).view(-1, *env.action_space.shape)
         output = (x.view(-1, np.prod(env.action_space.shape)) * self.action_scale) + self.action_bias
+        # print(f"Output shape: {output.shape}")
         return output
 
 
@@ -196,9 +191,6 @@ if __name__ == "__main__":
     q_optimizer = optim.Adam(list(qf1.parameters()), lr=args.learning_rate)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
 
-    # architecture summary of the models
-    # summary(actor, (1, *env.observation_space.shape))
-    # summary(qf1, [(1, *env.observation_space.shape), (1, *env.action_space.shape)])
 
     rb = ReplayBuffer(
         args.buffer_size,
@@ -217,12 +209,13 @@ if __name__ == "__main__":
             action = np.round(env.action_space.sample(), 2)
         else:
             with torch.no_grad():
-                action = actor(torch.Tensor(obs).to(device))
+                temp = copy.deepcopy(obs)
+                temp = torch.from_numpy(temp[:, :, 0:2]).permute(2, 0, 1).unsqueeze(0)
+                action = actor(torch.Tensor(temp).to(device))
                 action += torch.normal(0, actor.action_scale * args.exploration_noise)
                 action = action.cpu().numpy().reshape(env.action_space.shape).clip(env.action_space.low,
                                                                                    env.action_space.high)  # I MODIFY THAT
                 action = np.round(action, 2)
-                print(f"Sampled action shape: {action.shape}")
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
@@ -250,11 +243,17 @@ if __name__ == "__main__":
         if global_step > args.learning_starts:
             data = rb.sample(args.batch_size)
             with torch.no_grad():
-                next_state_actions = target_actor(data.next_observations)
-                qf1_next_target = qf1_target(data.next_observations, next_state_actions)
+                temp_actor = copy.deepcopy(data.next_observations)
+                temp_actor = temp_actor[:, :, :, 0:2].permute(0, 3, 1, 2)
+                next_state_actions = target_actor(temp_actor)
+                temp_qf1 = copy.deepcopy(data.next_observations)
+                temp_qf1 = temp_qf1[:, :, :, [1, 2]].permute(0, 3, 1, 2)
+                qf1_next_target = qf1_target(temp_qf1, next_state_actions)
                 next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (qf1_next_target).view(-1)
 
-            qf1_a_values = qf1(data.observations, data.actions).view(-1)
+            temp_qf1_a_values = copy.deepcopy(data.observations)
+            temp_qf1_a_values = temp_qf1_a_values[:, :, :, [1, 2]].permute(0, 3, 1, 2)
+            qf1_a_values = qf1(temp_qf1_a_values, data.actions).view(-1)
             qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
 
             # optimize the model
@@ -263,7 +262,9 @@ if __name__ == "__main__":
             q_optimizer.step()
 
             if global_step % args.policy_frequency == 0:
-                actor_loss = -qf1(data.observations, actor(data.observations)).mean()
+                temp = copy.deepcopy(data.observations)
+                temp = temp[:, :, :, [1, 2]].permute(0, 3, 1, 2)
+                actor_loss = -qf1(temp, actor(temp)).mean()
                 actor_optimizer.zero_grad()
                 actor_loss.backward()
                 actor_optimizer.step()

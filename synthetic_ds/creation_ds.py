@@ -4,7 +4,7 @@ import cv2
 import matplotlib.pyplot as plt
 
 # Set the dimensions and number of images
-image_size = (640, 640)
+image_size = (110, 110)
 num_images = 100
 
 # Create empty arrays to store the images
