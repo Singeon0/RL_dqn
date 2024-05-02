@@ -59,7 +59,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(25e2)
+    learning_starts: int = int(1e2)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -118,6 +118,10 @@ class Actor(nn.Module):
         self.fc2 = nn.Linear(256, 256)
         self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))
 
+        # Batch normalization layers for each channel
+        self.bn_image = nn.BatchNorm2d(1)  # BatchNorm for the image channel
+        self.bn_mask = nn.BatchNorm2d(1)   # BatchNorm for the mask channel
+
         # Action rescaling buffers
         self.register_buffer(
             "action_scale", torch.tensor(((env.action_space.high - env.action_space.low) / 2.0).reshape(-1), dtype=torch.float32)
@@ -128,15 +132,26 @@ class Actor(nn.Module):
 
     def forward(self, x):
         x = x.float()
+
+        # Split the input tensor into image and mask channels
+        image = x[:, 0:1, :, :]  # Extract the first channel
+        mask = x[:, 1:2, :, :]   # Extract the second channel
+
+        # Apply batch normalization
+        image = self.bn_image(image)
+        mask = self.bn_mask(mask)
+
+        # Concatenate the channels back together
+        x = torch.cat([image, mask], dim=1)
+
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
-        x = x.reshape(x.size(0), -1)  # Reshape the output for the fully connected layers
+        x = x.reshape(x.size(0), -1)  # Flatten for the fully connected layers
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = torch.tanh(self.fc_mu(x)).view(-1, *env.action_space.shape)
         output = (x.view(-1, np.prod(env.action_space.shape)) * self.action_scale) + self.action_bias
-        # print(f"Output shape: {output.shape}")
         return output
 
 
