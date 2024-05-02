@@ -153,7 +153,7 @@ def resize_grayscale_image(image_array, upscale_factor=2):
 
 
 class MedicalImageSegmentationEnv(gym.Env):
-    def __init__(self, data_path, num_control_points, max_iter, iou_threshold):
+    def __init__(self, data_path, num_control_points, max_iter, iou_threshold, interval_action_space=0.125):
         super(MedicalImageSegmentationEnv, self).__init__()
 
         # Load all images, initial masks, and ground truths
@@ -178,7 +178,7 @@ class MedicalImageSegmentationEnv(gym.Env):
                         1])  # sqrt because i want a square grid
 
         # Define the action space
-        self.action_space = spaces.Box(low=-0.125, high=0.125, shape=(int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)), 2),
+        self.action_space = spaces.Box(low=-interval_action_space, high=interval_action_space, shape=(int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)), 2),
                                        dtype=np.float16)
         """
         # Example of how to access value of control points from the action array

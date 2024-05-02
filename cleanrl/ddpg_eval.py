@@ -59,6 +59,7 @@ if __name__ == "__main__":
     num_control_points = 16
     max_iter = 100
     iou_threshold = 0.85
+    interval_action_space = 0.25
 
     model_path = Path(
         "runs/ddpg_continuous_action_images_segmentation__1__1714473083/ddpg_continuous_action_images_segmentation"
@@ -66,7 +67,7 @@ if __name__ == "__main__":
 
     evaluate(
         model_path,
-        make_env(data_path, num_control_points, max_iter, iou_threshold),
+        make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space),
         eval_episodes=10,
         run_name="eval",
         Model=(Actor, QNetwork),

@@ -67,9 +67,9 @@ class Args:
     """noise clip parameter of the Target Policy Smoothing Regularization"""
 
 
-def make_env(data_path, num_control_points, max_iter, iou_threshold):
+def make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space):
     def thunk():
-        env = MedicalImageSegmentationEnv(data_path, num_control_points, max_iter, iou_threshold)
+        env = MedicalImageSegmentationEnv(data_path, num_control_points, max_iter, iou_threshold, interval_action_space)
         return env
     return thunk
 
@@ -160,6 +160,7 @@ if __name__ == "__main__":
     num_control_points = 4
     max_iter = 4
     iou_threshold = 0.85
+    interval_action_space = 0.25
 
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__{args.seed}__{int(time.time())}"
@@ -192,7 +193,7 @@ if __name__ == "__main__":
     print(f"Device: {device}")
 
     # env setup
-    env = make_env(data_path, num_control_points, max_iter, iou_threshold)()
+    env = make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space)()
 
     actor = Actor(env).to(device)
     qf1 = QNetwork(env).to(device)
@@ -314,7 +315,7 @@ if __name__ == "__main__":
 
         episodic_returns = evaluate(
         model_path,
-        make_env(data_path, num_control_points, max_iter, iou_threshold),
+        make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space),
         eval_episodes=10,
         run_name="eval",
         Model=(Actor, QNetwork),
