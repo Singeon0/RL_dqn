@@ -45,11 +45,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(1e3)
+    total_timesteps: int = int(5e2)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(5e4)
+    buffer_size: int = int(5e3)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -158,8 +158,8 @@ class Actor(nn.Module):
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 4
-    max_iter = 4
-    iou_threshold = 0.85
+    max_iter = 1
+    iou_threshold = 0.5
     interval_action_space = 0.25
 
     args = tyro.cli(Args)
@@ -243,6 +243,8 @@ if __name__ == "__main__":
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
+        if global_step % 15 == 0:
+            env.render()
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in info:
