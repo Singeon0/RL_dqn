@@ -198,9 +198,20 @@ if __name__ == "__main__":
     )
     start_time = time.time()
 
+    # Initialize a variable to keep track of the last printed percentage
+    last_printed_percentage = 0
+
     # TRY NOT TO MODIFY: start the game
     obs, _ = env.reset()
     for global_step in range(args.total_timesteps):
+        # Calculate the current percentage of total timesteps completed
+        current_percentage = (global_step / args.total_timesteps) * 100
+
+        # If the current percentage is at least 10% more than the last printed percentage, print a message
+        if current_percentage - last_printed_percentage >= 10:
+            print(f"Script executed at {current_percentage:.0f}%")
+            last_printed_percentage = current_percentage
+
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
             action = np.round(env.action_space.sample(), 2)
@@ -300,3 +311,11 @@ if __name__ == "__main__":
 
     env.close()
     writer.close()
+
+    end_time = time.time()
+    execution_time = end_time - start_time  # Time in seconds
+    hours = execution_time // 3600
+    minutes = (execution_time % 3600) // 60
+    seconds = (execution_time % 3600) % 60
+
+    print(f"Execution time: {int(hours)}:{int(minutes)}:{int(seconds)}")
