@@ -1,7 +1,7 @@
+import copy
 from typing import Callable
 
 import torch
-import torch.nn as nn
 from pathlib import Path
 
 
@@ -31,15 +31,18 @@ def evaluate(
         episode_return = 0
         while not done:
             with torch.no_grad():
-                action = actor(torch.Tensor(obs).to(device))
+                temp = copy.deepcopy(obs)
+                temp = torch.from_numpy(temp[:, :, 0:2]).permute(2, 0, 1).unsqueeze(0)
+                action = actor(torch.Tensor(temp).to(device))
                 action += torch.normal(0, actor.action_scale * exploration_noise)
                 action = action.cpu().numpy().reshape(env.action_space.shape).clip(env.action_space.low, env.action_space.high)
 
             next_obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
+            if terminated or truncated:
+                env.render()
             episode_return += reward
             obs = next_obs
-            #env.render()
 
         print(f"eval_episode={len(episodic_returns)}, episodic_return={episode_return}")
         #env.render()
@@ -49,10 +52,10 @@ def evaluate(
 
 
 if __name__ == "__main__":
-    from cleanrl_utils.evals.ddpg_eval import evaluate
+    from cleanrl.ddpg_eval import evaluate
     from cleanrl.ddpg_continuous_action_images_segmentation import Actor, QNetwork, make_env
 
-    data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
+    data_path = Path('../cleanrl_utils') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 16
     max_iter = 100
     iou_threshold = 0.85

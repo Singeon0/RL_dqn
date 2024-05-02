@@ -5,8 +5,6 @@ import random
 import time
 from dataclasses import dataclass
 
-import matplotlib.pyplot as plt
-from gymnasium.wrappers import ResizeObservation
 import numpy as np
 import torch
 import torch.nn as nn
@@ -17,7 +15,6 @@ from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 from custom_env import MedicalImageSegmentationEnv
 from pathlib import Path
-from torchsummary import summary
 
 
 @dataclass
@@ -48,11 +45,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(1e4)
+    total_timesteps: int = int(1e3)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(3e4)
+    buffer_size: int = int(5e4)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -287,7 +284,7 @@ if __name__ == "__main__":
         torch.save((actor.state_dict(), qf1.state_dict()), model_path)
         print(f"model saved to {model_path}")
 
-        from cleanrl_utils.evals.ddpg_eval import evaluate
+        from ddpg_eval import evaluate
 
         episodic_returns = evaluate(
         model_path,
