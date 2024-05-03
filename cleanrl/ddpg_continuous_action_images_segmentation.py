@@ -11,11 +11,13 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
+import torchvision
 import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 from custom_env import MedicalImageSegmentationEnv
 from pathlib import Path
+from torchsummary import summary
 
 
 @dataclass
@@ -34,18 +36,12 @@ class Args:
     """the wandb's project name"""
     wandb_entity: str = None
     """the entity (team) of wandb's project"""
-    capture_video: bool = False
-    """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_model: bool = False
+    save_model: bool = True
     """whether to save model into the `runs/{run_name}` folder"""
-    upload_model: bool = False
-    """whether to upload the saved model to huggingface"""
-    hf_entity: str = ""
-    """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    env_id: str = "Image_Segmentation-v0"
-    """the environment id of the Atari game"""
+    env_id: str = "Image_Segmentation-v1"
+    """the environment id"""
     total_timesteps: int = int(3e3)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
@@ -74,14 +70,23 @@ def make_env(data_path, num_control_points, max_iter, iou_threshold, interval_ac
         return env
     return thunk
 
+
+class ResNetFeatureExtractor(nn.Module):
+    def __init__(self, input_channels):
+        super().__init__()
+        self.resnet = torchvision.models.resnet18(weights=None)
+        self.resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.resnet.fc = nn.Identity()
+
+    def forward(self, x):
+        return self.resnet(x)
+
 # ALGO LOGIC: initialize agent here:
 class QNetwork(nn.Module):
     def __init__(self, env):
         super().__init__()
-        self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.fc1 = nn.Linear(64 * env.observation_space.shape[0] * env.observation_space.shape[1], 256)
+        self.feature_extractor = ResNetFeatureExtractor(2)
+        self.fc1 = nn.Linear(512, 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
 
@@ -92,11 +97,7 @@ class QNetwork(nn.Module):
         :return: the Q value of the input state-action pair in shape [batch_size, 1]
         """
         x = x.float()
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        x = x.reshape(x.size(0), -1)  # Flatten the output for the fully connected layers
-
+        x = self.feature_extractor(x)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = self.fc3(x)
@@ -108,12 +109,8 @@ class Actor(nn.Module):
         super().__init__()
         # Assuming env.observation_space.shape is (H, W, C)
         input_channels = env.observation_space.shape[2] - 1  # Last dimension is channels AND -1 because i only use mask and image and not the ground truth
-        self.conv1 = nn.Conv2d(input_channels, 32, kernel_size=3, stride=1, padding=1)
-        self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
-        self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-
-        # After convolutions, the spatial dimensions (H, W) remain unchanged due to padding
-        self.fc1 = nn.Linear(64 * env.observation_space.shape[0] * env.observation_space.shape[1], 256)
+        self.feature_extractor = ResNetFeatureExtractor(input_channels)
+        self.fc1 = nn.Linear(512, 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))
 
@@ -135,22 +132,14 @@ class Actor(nn.Module):
         :return: the action parameters to take with the shape [batch_size, action_dim]
         """
         x = x.float()
-
-        # Split the input tensor into image and mask channels
-        image = x[:, 0:1, :, :]  # Extract the first channel
-        mask = x[:, 1:2, :, :]   # Extract the second channel
-
-        # Apply batch normalization
+        image = x[:, 0:1, :, :]
+        mask = x[:, 1:2, :, :]
         image = self.bn_image(image)
         mask = self.bn_mask(mask)
 
-        # Concatenate the channels back together
         x = torch.cat([image, mask], dim=1)
 
-        x = F.relu(self.conv1(x))
-        x = F.relu(self.conv2(x))
-        x = F.relu(self.conv3(x))
-        x = x.reshape(x.size(0), -1)  # Flatten for the fully connected layers
+        x = self.feature_extractor(x)
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
         x = torch.tanh(self.fc_mu(x)).view(-1, *env.action_space.shape)
@@ -163,7 +152,7 @@ if __name__ == "__main__":
     num_control_points = 4
     max_iter = 1
     iou_threshold = 0.5
-    interval_action_space = 0.8
+    interval_action_space = 0.125
 
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__CP{num_control_points}__AS{interval_action_space}__it{max_iter}__{int(time.time())}"
@@ -207,7 +196,14 @@ if __name__ == "__main__":
     q_optimizer = optim.Adam(list(qf1.parameters()), lr=args.learning_rate)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
 
+    # Assuming the input size for both models is (2, 110, 110)
+    input_size = (2, 110, 110)
 
+    print("Actor Summary:")
+    summary(actor, input_size)
+
+    print("\nQNetwork (qf1) Summary:")
+    summary(qf1, input_size)
     rb = ReplayBuffer(
         args.buffer_size,
         env.observation_space,
@@ -246,8 +242,8 @@ if __name__ == "__main__":
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
-        #if global_step % 15 == 0:
-            #env.render()
+        if global_step % 100 == 0:
+            env.render()
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in info:
