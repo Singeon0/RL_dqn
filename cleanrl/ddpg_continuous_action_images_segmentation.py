@@ -20,7 +20,7 @@ from pathlib import Path
 
 @dataclass
 class Args:
-    exp_name: str = os.path.basename(__file__)[: -len(".py")]
+    exp_name: str = "Image_Segmentation-ResNet"
     """the name of this experiment"""
     seed: int = 1
     """seed of the experiment"""
@@ -36,7 +36,7 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_model: bool = True
+    save_model: bool = False
     """whether to save model into the `runs/{run_name}` folder"""
     upload_model: bool = False
     """whether to upload the saved model to huggingface"""
@@ -46,7 +46,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(3e2)
+    total_timesteps: int = int(3e3)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -60,7 +60,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(25e1)
+    learning_starts: int = int(25e2)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -163,7 +163,7 @@ if __name__ == "__main__":
     num_control_points = 4
     max_iter = 1
     iou_threshold = 0.5
-    interval_action_space = 0.55
+    interval_action_space = 0.8
 
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__CP{num_control_points}__AS{interval_action_space}__it{max_iter}__{int(time.time())}"
@@ -222,11 +222,6 @@ if __name__ == "__main__":
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = env.reset()
-    img = env.render(mode="rgb_array")
-    plt.imshow(img)
-    plt.title("Initial image")
-    plt.show()
-
     for global_step in range(args.total_timesteps):
         # Calculate the current percentage of total timesteps completed
         current_percentage = (global_step / args.total_timesteps) * 100
@@ -314,9 +309,6 @@ if __name__ == "__main__":
                 writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
                 writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
-                img = env.render(mode="rgb_array")
-                img = img.transpose(2, 0, 1)  # Reshape the image to (C, H, W) format
-                writer.add_image(f"charts/image_{global_step}", img, global_step)
 
     if args.save_model:
         model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
@@ -325,10 +317,10 @@ if __name__ == "__main__":
 
         from ddpg_eval import evaluate
 
-        episodic_returns = evaluate(
+        episodic_returns, obs_env = evaluate(
         model_path,
         make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space),
-        eval_episodes=10,
+        eval_episodes=100,
         run_name="eval",
         Model=(Actor, QNetwork),
         device="cpu",
@@ -336,6 +328,9 @@ if __name__ == "__main__":
         for idx, episodic_return in enumerate(episodic_returns):
             writer.add_scalar("eval/episodic_return", episodic_return, idx)
             print(f"eval_episode={idx}, episodic_return={episodic_return}")
+            img = obs_env[idx]
+            img = img.transpose(2, 0, 1)  # Reshape the image to (C, H, W) format
+            writer.add_image(f"charts/obs_eval{idx}", img, global_step)
 
     env.close()
     writer.close()

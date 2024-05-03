@@ -25,6 +25,7 @@ def evaluate(
     # note: qf is not used in this script
 
     episodic_returns = []
+    obs_env = []
     while len(episodic_returns) < eval_episodes:
         obs, _ = env.reset()
         done = False
@@ -39,16 +40,16 @@ def evaluate(
 
             next_obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-            # if terminated or truncated:
-                # env.render()
+            if terminated or truncated:
+                img = env.render(mode='rgb_array')
+                obs_env.append(img)
             episode_return += reward
             obs = next_obs
 
         print(f"eval_episode={len(episodic_returns)}, episodic_return={episode_return}")
-        #env.render()
         episodic_returns.append(episode_return)
 
-    return episodic_returns
+    return episodic_returns, obs_env
 
 
 if __name__ == "__main__":
