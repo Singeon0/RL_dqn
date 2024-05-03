@@ -353,36 +353,41 @@ class MedicalImageSegmentationEnv(gym.Env):
             raise ValueError(f"Unsupported render mode: {mode}")
 
     def _render_frame(self, mode='human'):
-        # Create a figure
-        fig, ax = plt.subplots(figsize=(5, 5))
-
-        # Display the MRI image in grayscale
-        ax.imshow(self.mri_images[self.current_index], cmap='gray')
-        title = f'At it {self.iteration}, reward is {np.round(self._compute_reward(), 3)}'
-        ax.set_title(title)
-        ax.axis('off')
-
-        # Overlay the current mask in green
-        ax.imshow(np.ma.masked_where(self.current_mask == 0, self.current_mask), cmap='Greens', alpha=0.5)
-
-        # Overlay the ground truth mask in red
-        ax.imshow(
-            np.ma.masked_where(self.ground_truths[self.current_index] == 0, self.ground_truths[self.current_index]),
-            cmap='Reds', alpha=0.5)
-
-        # Adjust the layout
-        plt.tight_layout()
+        # Normalize the images to have values between 0 and 1
+        mri_image = self.mri_images[self.current_index] / 255.0
+        current_mask = self.current_mask.astype(np.float32)
+        ground_truth = self.ground_truths[self.current_index].astype(np.float32)
 
         if mode == 'human':
+            # Create a figure
+            fig, ax = plt.subplots(figsize=(5, 5))
+
+            # Display the MRI image in grayscale
+            ax.imshow(mri_image, cmap='gray')
+            title = f'At it {self.iteration}, reward is {np.round(self._compute_reward(), 3)}'
+            ax.set_title(title)
+            ax.axis('off')
+
+            # Overlay the current mask in green
+            ax.imshow(np.ma.masked_where(current_mask == 0, current_mask), cmap='Greens', alpha=0.5)
+
+            # Overlay the ground truth mask in red
+            ax.imshow(np.ma.masked_where(ground_truth == 0, ground_truth), cmap='Reds', alpha=0.5)
+
+            # Adjust the layout
+            plt.tight_layout()
+
             # Display the plot
             plt.show(block=False)
             plt.pause(0.09)
             plt.close()
-        elif mode == 'rgb_array':
-            # Convert the plot to an RGB array
-            fig.canvas.draw()
-            image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.float32)
-            image_from_plot = image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
-            plt.close()
-            return image_from_plot
 
+        elif mode == 'rgb_array':
+            # Combine the MRI image with the current mask
+            combined_image = apply_mask_to_image(mri_image, current_mask, intensity=0.5)
+
+            # Combine the result with the ground truth mask
+            combined_image = apply_mask_to_image(combined_image, ground_truth, intensity=0.5)
+
+            # Return the combined image as a numpy array
+            return combined_image

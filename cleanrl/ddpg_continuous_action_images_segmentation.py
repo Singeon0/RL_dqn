@@ -5,6 +5,7 @@ import random
 import time
 from dataclasses import dataclass
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -45,7 +46,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(3e3)
+    total_timesteps: int = int(3e2)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -59,7 +60,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(25e2)
+    learning_starts: int = int(25e1)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -303,12 +304,13 @@ if __name__ == "__main__":
                 for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-            if global_step % 100 == 0:  # TODO i don"t enter in this loop ??
+            if global_step % 100 == 0:
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                 writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
                 writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
-
+                img = env.render(mode="rgb_array")
+                writer.add_image("charts/image", img)
 
     if args.save_model:
         model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
