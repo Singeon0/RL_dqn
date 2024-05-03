@@ -28,9 +28,9 @@ def apply_mask_to_image(image, mask, intensity=0.5):
     The function combines the image and the mask through a weighted operation, producing a blended output.
 
     Args:
-        image (np.array): The source image, needs to be of type uint8.
+        image (np.array): The source image, needs to be of type float32.
         mask (np.array): The mask to overlay. Needs to be of the same type as the image.
-            Convert it if necessary, using astype(image.dtype) or astype(np.uint8).
+            Convert it if necessary, using astype(image.dtype) or astype(np.float32).
         intensity (float): The intensity or alpha of the mask.
 
     Returns:
@@ -46,8 +46,8 @@ def apply_mask_to_image(image, mask, intensity=0.5):
     alpha = intensity
     beta = (1.0 - alpha)
     combined = cv2.addWeighted(image, alpha, mask*255, beta, 0.0)  # Multiply the mask by 255 to have the same scale as the image (mask is composed of 1 and 0)
-    # transform the combined image to uint8
-    combined = combined.astype(np.uint8)
+    # transform the combined image to float32
+    combined = combined.astype(np.float32)
     return combined
 
 
@@ -88,7 +88,7 @@ def process_mask(data, img_size=(640, 640)):
 
         # Create a new image of the appropriate size and apply the mask
         new_size = img_size[0] * i, img_size[1] * i
-        shape_img = np.zeros(new_size, dtype=np.uint8)
+        shape_img = np.zeros(new_size, dtype=np.float32)
 
         # Ensure the indices are within the bounds of the array
         x = new_shape_int[0]  # x coordinates
@@ -118,7 +118,7 @@ def process_mask(data, img_size=(640, 640)):
         resized_image[resized_image > 0] = 1
 
     else:
-        shape_img = np.zeros(img_size, dtype=np.uint8)
+        shape_img = np.zeros(img_size, dtype=np.float32)
         resized_image = shape_img
 
     return resized_image
@@ -189,7 +189,7 @@ class MedicalImageSegmentationEnv(gym.Env):
         # Define the observation space
         self.observation_space = spaces.Box(low=0, high=255,
                                             shape=(self.mri_images[0].shape[0], self.mri_images[0].shape[0], 3),  # Change the 1 to 3 bc the observation is composed of image, mask and ground truth
-                                            dtype=np.uint8)
+                                            dtype=np.float32)
 
         print(f"Observation space shape: {self.observation_space.shape}")
         print(f"Action space shape: {self.action_space.shape}")
@@ -381,7 +381,7 @@ class MedicalImageSegmentationEnv(gym.Env):
         elif mode == 'rgb_array':
             # Convert the plot to an RGB array
             fig.canvas.draw()
-            image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.uint8)
+            image_from_plot = np.frombuffer(fig.canvas.tostring_rgb(), dtype=np.float32)
             image_from_plot = image_from_plot.reshape(fig.canvas.get_width_height()[::-1] + (3,))
             plt.close()
             return image_from_plot

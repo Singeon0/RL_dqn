@@ -39,8 +39,8 @@ def evaluate(
 
             next_obs, reward, terminated, truncated, info = env.step(action)
             done = terminated or truncated
-            if terminated or truncated:
-                env.render()
+            # if terminated or truncated:
+                # env.render()
             episode_return += reward
             obs = next_obs
 
@@ -68,7 +68,7 @@ if __name__ == "__main__":
     evaluate(
         model_path,
         make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space),
-        eval_episodes=10,
+        eval_episodes=25,
         run_name="eval",
         Model=(Actor, QNetwork),
         device="cpu",

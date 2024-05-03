@@ -45,21 +45,21 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(5e1)
+    total_timesteps: int = int(3e3)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(5e3)
+    buffer_size: int = int(5e4)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
     tau: float = 0.005
     """target smoothing coefficient (default: 0.005)"""
-    batch_size: int = 256
+    batch_size: int = 128
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(1e1)
+    learning_starts: int = int(25e2)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -162,7 +162,7 @@ if __name__ == "__main__":
     num_control_points = 4
     max_iter = 1
     iou_threshold = 0.5
-    interval_action_space = 0.125
+    interval_action_space = 0.55
 
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__CP{num_control_points}__AS{interval_action_space}__it{max_iter}__{int(time.time())}"
@@ -245,8 +245,8 @@ if __name__ == "__main__":
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
-        if global_step % 15 == 0:
-            env.render()
+        #if global_step % 15 == 0:
+            #env.render()
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in info:
