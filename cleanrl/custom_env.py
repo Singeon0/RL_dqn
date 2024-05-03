@@ -383,11 +383,12 @@ class MedicalImageSegmentationEnv(gym.Env):
             plt.close()
 
         elif mode == 'rgb_array':
-            # Combine the MRI image with the current mask
-            combined_image = apply_mask_to_image(mri_image, current_mask, intensity=0.5)
+            # Multiply each image by its desired intensity
+            mri_image_intensity = mri_image * 100
+            ground_truth_intensity = ground_truth * 150
+            current_mask_intensity = current_mask * 200
 
-            # Combine the result with the ground truth mask
-            combined_image = apply_mask_to_image(combined_image, ground_truth, intensity=0.5)
+            # Stack the images along the third axis (channel dimension)
+            rgb_array = np.dstack((mri_image_intensity, ground_truth_intensity, current_mask_intensity))
 
-            # Return the combined image as a numpy array
-            return combined_image
+            return rgb_array

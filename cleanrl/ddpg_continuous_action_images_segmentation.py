@@ -222,6 +222,11 @@ if __name__ == "__main__":
 
     # TRY NOT TO MODIFY: start the game
     obs, _ = env.reset()
+    img = env.render(mode="rgb_array")
+    plt.imshow(img)
+    plt.title("Initial image")
+    plt.show()
+
     for global_step in range(args.total_timesteps):
         # Calculate the current percentage of total timesteps completed
         current_percentage = (global_step / args.total_timesteps) * 100
@@ -304,13 +309,14 @@ if __name__ == "__main__":
                 for param, target_param in zip(qf1.parameters(), qf1_target.parameters()):
                     target_param.data.copy_(args.tau * param.data + (1 - args.tau) * target_param.data)
 
-            if global_step % 100 == 0:
+            if global_step % 10 == 0:
                 writer.add_scalar("losses/qf1_values", qf1_a_values.mean().item(), global_step)
                 writer.add_scalar("losses/qf1_loss", qf1_loss.item(), global_step)
                 writer.add_scalar("losses/actor_loss", actor_loss.item(), global_step)
                 writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
                 img = env.render(mode="rgb_array")
-                writer.add_image("charts/image", img)
+                img = img.transpose(2, 0, 1)  # Reshape the image to (C, H, W) format
+                writer.add_image(f"charts/image_{global_step}", img, global_step)
 
     if args.save_model:
         model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
