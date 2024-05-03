@@ -80,15 +80,14 @@ class QNetwork(nn.Module):
         self.conv1 = nn.Conv2d(2, 32, kernel_size=3, stride=1, padding=1)
         self.conv2 = nn.Conv2d(32, 64, kernel_size=3, stride=1, padding=1)
         self.conv3 = nn.Conv2d(64, 64, kernel_size=3, stride=1, padding=1)
-        self.fc1 = nn.Linear(64 * env.observation_space.shape[0] * env.observation_space.shape[1] + np.prod(env.action_space.shape), 256)
+        self.fc1 = nn.Linear(64 * env.observation_space.shape[0] * env.observation_space.shape[1], 256)
         self.fc2 = nn.Linear(256, 256)
         self.fc3 = nn.Linear(256, 1)
 
-    def forward(self, x, action):
+    def forward(self, x):
         """
 
         :param x: the input tensor containing both mask (channel 0) and ground truth (channel 1) data in shape [batch_size, channels=2, height=110, width=110] ; mask and ground truth are binary images [0, 1]
-        :param action: actions taken by the agent in shape [batch_size, action_dim]
         :return: the Q value of the input state-action pair in shape [batch_size, 1]
         """
         x = x.float()
@@ -96,12 +95,6 @@ class QNetwork(nn.Module):
         x = F.relu(self.conv2(x))
         x = F.relu(self.conv3(x))
         x = x.reshape(x.size(0), -1)  # Flatten the output for the fully connected layers
-
-        # Flatten the action tensor if not already flat
-        action = action.view(action.size(0), -1)
-
-        # Concatenate the flattened feature maps and action
-        x = torch.cat([x, action], dim=1)
 
         x = F.relu(self.fc1(x))
         x = F.relu(self.fc2(x))
@@ -169,10 +162,10 @@ if __name__ == "__main__":
     num_control_points = 4
     max_iter = 1
     iou_threshold = 0.5
-    interval_action_space = 0.25
+    interval_action_space = 0.125
 
     args = tyro.cli(Args)
-    run_name = f"{args.exp_name}__{args.seed}__{int(time.time())}"
+    run_name = f"{args.exp_name}__CP{num_control_points}__AS{interval_action_space}__it{max_iter}__{int(time.time())}"
     if args.track:
         import wandb
 
@@ -283,12 +276,12 @@ if __name__ == "__main__":
                 next_state_actions = target_actor(temp_actor)
                 temp_qf1 = copy.deepcopy(data.next_observations)
                 temp_qf1 = temp_qf1[:, :, :, [1, 2]].permute(0, 3, 1, 2)
-                qf1_next_target = qf1_target(temp_qf1, next_state_actions)
+                qf1_next_target = qf1_target(temp_qf1)
                 next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (qf1_next_target).view(-1)
 
             temp_qf1_a_values = copy.deepcopy(data.observations)
             temp_qf1_a_values = temp_qf1_a_values[:, :, :, [1, 2]].permute(0, 3, 1, 2)
-            qf1_a_values = qf1(temp_qf1_a_values, data.actions).view(-1)
+            qf1_a_values = qf1(temp_qf1_a_values).view(-1)
             qf1_loss = F.mse_loss(qf1_a_values, next_q_value)
 
             # optimize the model
@@ -299,7 +292,7 @@ if __name__ == "__main__":
             if global_step % args.policy_frequency == 0:
                 temp = copy.deepcopy(data.observations)
                 temp = temp[:, :, :, [1, 2]].permute(0, 3, 1, 2)
-                actor_loss = -qf1(temp, actor(temp)).mean()
+                actor_loss = -qf1(temp).mean()
                 actor_optimizer.zero_grad()
                 actor_loss.backward()
                 actor_optimizer.step()
