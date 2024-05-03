@@ -45,7 +45,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v0"
     """the environment id of the Atari game"""
-    total_timesteps: int = int(5e2)
+    total_timesteps: int = int(5e1)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -59,7 +59,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(1e2)
+    learning_starts: int = int(1e1)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -85,7 +85,12 @@ class QNetwork(nn.Module):
         self.fc3 = nn.Linear(256, 1)
 
     def forward(self, x, action):
-        # x is now assumed to be the input tensor containing both image and ground truth data in shape [16, 2, 110, 110]
+        """
+
+        :param x: the input tensor containing both mask (channel 0) and ground truth (channel 1) data in shape [batch_size, channels=2, height=110, width=110] ; mask and ground truth are binary images [0, 1]
+        :param action: actions taken by the agent in shape [batch_size, action_dim]
+        :return: the Q value of the input state-action pair in shape [batch_size, 1]
+        """
         x = x.float()
         x = F.relu(self.conv1(x))
         x = F.relu(self.conv2(x))
@@ -131,6 +136,10 @@ class Actor(nn.Module):
         )
 
     def forward(self, x):
+        """
+        :param x:  the input tensor containing both image (channel 0) and mask (channel 1) data in shape [batch_size, channels=2, height=110, width=110] ; image is grayscale [0,255] and mask is binary [0, 1]
+        :return: the action parameters to take with the shape [batch_size, action_dim]
+        """
         x = x.float()
 
         # Split the input tensor into image and mask channels
