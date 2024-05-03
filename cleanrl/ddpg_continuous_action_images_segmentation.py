@@ -56,7 +56,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(25e2)
+    learning_starts: int = int(50e2)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -150,8 +150,8 @@ class Actor(nn.Module):
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 4
-    max_iter = 1
-    iou_threshold = 0.5
+    max_iter = 2
+    iou_threshold = 0.8
     interval_action_space = 0.125
 
     args = tyro.cli(Args)
@@ -229,7 +229,7 @@ if __name__ == "__main__":
 
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            action = np.round(env.action_space.sample(), 2)
+            action = np.round(env.action_sample(percentage=0.05), 2)
         else:
             with torch.no_grad():
                 temp = copy.deepcopy(obs)

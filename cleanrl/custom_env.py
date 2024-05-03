@@ -1,5 +1,6 @@
 import copy
 import warnings
+import random
 
 import gymnasium as gym
 import cv2
@@ -13,6 +14,42 @@ from pygem import FFD
 from sklearn.metrics import jaccard_score
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
+
+
+def create_action_matrix(n_control_points, corner_value):
+    """
+    Create a matrix with dimensions based on the square root of n_control_points,
+    and set corner values with alternating pattern for mu_x and mu_y.
+
+    Args:
+    - n_control_points (int): Total number of control points. Must be a perfect square.
+    - corner_value (float): Base value to use for setting corner values.
+
+    Returns:
+    - np.array: A numpy array with the specified corner values set.
+    """
+    # Calculate the dimensions of the matrix
+    lp = int(np.sqrt(n_control_points))
+    if lp * lp != n_control_points:
+        raise ValueError("n_control_points must be a perfect square")
+
+    # Initialize the array
+    action = np.zeros((lp, lp, 2))
+
+    # Set the corners to specified values based on your example
+    # mu_x assignments
+    action[lp - 1, lp - 1, 0] = corner_value  # Bottom-right
+    action[0, 0, 0] = -corner_value  # Top-left
+    action[0, lp - 1, 0] = -corner_value  # Top-right
+    action[lp - 1, 0, 0] = corner_value  # Bottom-left
+
+    # mu_y assignments
+    action[lp - 1, lp - 1, 1] = corner_value  # Bottom-right
+    action[0, 0, 1] = -corner_value  # Top-left
+    action[0, lp - 1, 1] = corner_value  # Top-right
+    action[lp - 1, 0, 1] = -corner_value  # Bottom-left
+
+    return action
 
 
 def transform_array(input_array):
@@ -177,6 +214,8 @@ class MedicalImageSegmentationEnv(gym.Env):
         self.ffd = FFD([int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)),
                         1])  # sqrt because i want a square grid
 
+        self.interval_action_space = interval_action_space
+
         # Define the action space
         self.action_space = spaces.Box(low=-interval_action_space, high=interval_action_space, shape=(int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)), 2),
                                        dtype=np.float16)
@@ -193,6 +232,21 @@ class MedicalImageSegmentationEnv(gym.Env):
 
         print(f"Observation space shape: {self.observation_space.shape}")
         print(f"Action space shape: {self.action_space.shape}")
+
+
+    def action_sample(self, percentage=0.05):
+        """
+        Randomly sample an action from the action space, with a small chance of expanding the mask.
+        Args:
+            percentage: The probability of expanding the mask.
+
+        Returns: action parameters
+
+        """
+        if random.random() <= percentage:  # 5% chance of expansion
+            return create_action_matrix(self.num_control_points, self.interval_action_space)
+        else:
+            return self.action_space.sample()
 
     def seed(self, seed=None):
         self.np_random, seed = gym.utils.seeding.np_random(seed)
@@ -308,14 +362,14 @@ class MedicalImageSegmentationEnv(gym.Env):
         return shape_img
 
     def _compute_reward(self):
-        # Compute the IoU between the deformed mask and the ground truth mask
-        iou_deformed = self._compute_iou(self.current_mask, self.ground_truths[self.current_index])
-        # iou_initial = self._compute_iou(self.initial_masks[self.current_index], self.ground_truths[self.current_index])
+        mask = self.current_mask
+        ground_truth = self.ground_truths[self.current_index]
 
-        # Compute the reward as the improvement in IoU
-        reward = iou_deformed ** 2  # TODO
-
+        iou = np.sum(mask & ground_truth) / np.sum(mask | ground_truth)
+        excess = np.sum(mask & ~ground_truth) / np.sum(mask)
+        reward = iou ** 2 - excess
         return reward
+
 
     def _is_terminated(self):
         # Calculate the total number of pixels in the current mask and the ground truth
