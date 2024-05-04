@@ -42,7 +42,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v1"
     """the environment id"""
-    total_timesteps: int = int(3e3)
+    total_timesteps: int = int(1e4)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -56,7 +56,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(50e2)
+    learning_starts: int = int(50e3)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -132,7 +132,7 @@ class Actor(nn.Module):
         :return: the action parameters to take with the shape [batch_size, action_dim]
         """
         x = x.float()
-        image = x[:, 0:1, :, :]
+        image = x[:, 0:1, :, :] / 255.0  # Normalize the image to [0, 1]
         mask = x[:, 1:2, :, :]
         image = self.bn_image(image)
         mask = self.bn_mask(mask)
@@ -150,9 +150,9 @@ class Actor(nn.Module):
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 4
-    max_iter = 2
+    max_iter = 1
     iou_threshold = 0.8
-    interval_action_space = 0.125
+    interval_action_space = 0.25
 
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__CP{num_control_points}__AS{interval_action_space}__it{max_iter}__{int(time.time())}"
@@ -199,11 +199,6 @@ if __name__ == "__main__":
     # Assuming the input size for both models is (2, 110, 110)
     input_size = (2, 110, 110)
 
-    print("Actor Summary:")
-    summary(actor, input_size)
-
-    print("\nQNetwork (qf1) Summary:")
-    summary(qf1, input_size)
     rb = ReplayBuffer(
         args.buffer_size,
         env.observation_space,
@@ -227,9 +222,11 @@ if __name__ == "__main__":
             print(f"Script executed at {current_percentage:.0f}%")
             last_printed_percentage = current_percentage
 
+        rnd = True
+
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            action = np.round(env.action_sample(percentage=0.05), 2)
+            action = np.round(env.action_sample(percentage=0.999, interval_action_space=0.15), 4)
         else:
             with torch.no_grad():
                 temp = copy.deepcopy(obs)
@@ -238,12 +235,15 @@ if __name__ == "__main__":
                 action += torch.normal(0, actor.action_scale * args.exploration_noise)
                 action = action.cpu().numpy().reshape(env.action_space.shape).clip(env.action_space.low,
                                                                                    env.action_space.high)  # I MODIFY THAT
-                action = np.round(action, 2)
+                rnd = False
 
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
+
         if global_step % 100 == 0:
-            env.render()
+            img = env.render(mode="rgb_array")
+            img = img.transpose(2, 0, 1)  # Reshape the image to (C, H, W) format
+            writer.add_image(f"charts/obs_eval{global_step}_rnd={rnd}", img)
 
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in info:
@@ -319,7 +319,7 @@ if __name__ == "__main__":
         eval_episodes=100,
         run_name="eval",
         Model=(Actor, QNetwork),
-        device="cpu",
+        device="cuda" if torch.cuda.is_available() else "cpu",
     )
         for idx, episodic_return in enumerate(episodic_returns):
             writer.add_scalar("eval/episodic_return", episodic_return, idx)

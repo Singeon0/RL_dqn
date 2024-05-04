@@ -234,17 +234,18 @@ class MedicalImageSegmentationEnv(gym.Env):
         print(f"Action space shape: {self.action_space.shape}")
 
 
-    def action_sample(self, percentage=0.05):
+    def action_sample(self, percentage=0.05, interval_action_space=0.125):
         """
         Randomly sample an action from the action space, with a small chance of expanding the mask.
         Args:
             percentage: The probability of expanding the mask.
+            interval_action_space: The interval of the action space.
 
         Returns: action parameters
 
         """
         if random.random() <= percentage:  # 5% chance of expansion
-            return create_action_matrix(self.num_control_points, self.interval_action_space)
+            return create_action_matrix(self.num_control_points, interval_action_space)
         else:
             return self.action_space.sample()
 
@@ -367,7 +368,7 @@ class MedicalImageSegmentationEnv(gym.Env):
 
         iou = np.sum(mask & ground_truth) / np.sum(mask | ground_truth)
         excess = np.sum(mask & ~ground_truth) / np.sum(mask)
-        reward = iou ** 2 - excess
+        reward = iou ** 2 - excess ** 2
         return reward
 
 
@@ -408,7 +409,7 @@ class MedicalImageSegmentationEnv(gym.Env):
 
     def _render_frame(self, mode='human'):
         # Normalize the images to have values between 0 and 1
-        mri_image = self.mri_images[self.current_index] / 255.0
+        mri_image = self.mri_images[self.current_index].astype(np.float32) / 255.0
         current_mask = self.current_mask.astype(np.float32)
         ground_truth = self.ground_truths[self.current_index].astype(np.float32)
 
@@ -417,24 +418,25 @@ class MedicalImageSegmentationEnv(gym.Env):
             fig, ax = plt.subplots(figsize=(5, 5))
 
             # Display the MRI image in grayscale
-            ax.imshow(mri_image, cmap='gray')
+            ax.imshow(mri_image, cmap='viridis', alpha=0.8)
             title = f'At it {self.iteration}, reward is {np.round(self._compute_reward(), 3)}'
             ax.set_title(title)
             ax.axis('off')
 
-            # Overlay the current mask in green
-            ax.imshow(np.ma.masked_where(current_mask == 0, current_mask), cmap='Greens', alpha=0.5)
+            # Overlay the ground truth mask in red with higher transparency # TODO
+            # ax.imshow(np.ma.masked_where(ground_truth == 0, ground_truth), cmap='Reds', alpha=0.6)
 
-            # Overlay the ground truth mask in red
-            ax.imshow(np.ma.masked_where(ground_truth == 0, ground_truth), cmap='Reds', alpha=0.5)
+            # Overlay the current mask in green with higher transparency
+            ax.imshow(np.ma.masked_where(current_mask == 0, current_mask), cmap='viridis', alpha=0.6)
 
             # Adjust the layout
             plt.tight_layout()
 
             # Display the plot
             plt.show(block=False)
-            plt.pause(0.09)
+            plt.pause(1)
             plt.close()
+
 
         elif mode == 'rgb_array':
             # Multiply each image by its desired intensity
