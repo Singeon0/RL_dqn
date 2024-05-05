@@ -5,7 +5,6 @@ import random
 import time
 from dataclasses import dataclass
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -17,7 +16,6 @@ from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 from custom_env import MedicalImageSegmentationEnv
 from pathlib import Path
-from torchsummary import summary
 
 
 @dataclass
@@ -42,11 +40,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v1"
     """the environment id"""
-    total_timesteps: int = int(5e4)
+    total_timesteps: int = int(5e2)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(5e4)
+    buffer_size: int = int(5e2)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -56,7 +54,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(50e3)
+    learning_starts: int = int(5e1)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
