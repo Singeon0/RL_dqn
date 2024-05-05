@@ -43,7 +43,7 @@ def evaluate(
             if terminated or truncated:
                 img = env.render(mode='rgb_array')
                 obs_env.append(img)
-            episode_return += reward
+                episode_return += reward
             obs = next_obs
 
         print(f"eval_episode={len(episodic_returns)}, episodic_return={episode_return}")

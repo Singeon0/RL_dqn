@@ -5,6 +5,7 @@ import random
 import time
 from dataclasses import dataclass
 
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -40,11 +41,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v1"
     """the environment id"""
-    total_timesteps: int = int(5e2)
+    total_timesteps: int = int(1e3)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    buffer_size: int = int(5e2)
+    buffer_size: int = int(5e4)
     """the replay memory buffer size"""
     gamma: float = 0.99
     """the discount factor gamma"""
@@ -54,7 +55,7 @@ class Args:
     """the batch size of sample from the reply memory"""
     exploration_noise: float = 0.1
     """the scale of exploration noise"""
-    learning_starts: int = int(5e1)
+    learning_starts: int = int(5e2)
     """timestep to start learning"""
     policy_frequency: int = 2
     """the frequency of training policy (delayed)"""
@@ -148,9 +149,9 @@ class Actor(nn.Module):
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 4
-    max_iter = 5
+    max_iter = 4
     iou_threshold = 0.8
-    interval_action_space = 0.25
+    interval_action_space = 0.15
 
     args = tyro.cli(Args)
     run_name = f"{args.exp_name}__CP{num_control_points}__AS{interval_action_space}__it{max_iter}__{int(time.time())}"
@@ -238,11 +239,6 @@ if __name__ == "__main__":
         # TRY NOT TO MODIFY: execute the game and log data.
         next_obs, reward, terminated, truncated, info = env.step(action)
 
-        if global_step % 100 == 0:
-            img = env.render(mode="rgb_array")
-            img = img.transpose(2, 0, 1)  # Reshape the image to (C, H, W) format
-            writer.add_image(f"charts/obs_eval{global_step}_rnd={rnd}", img)
-
         # TRY NOT TO MODIFY: record rewards for plotting purposes
         if "episode" in info:
             writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
@@ -314,7 +310,7 @@ if __name__ == "__main__":
         episodic_returns, obs_env = evaluate(
         model_path,
         make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space),
-        eval_episodes=100,
+        eval_episodes=1000,
         run_name="eval",
         Model=(Actor, QNetwork),
         device="cuda" if torch.cuda.is_available() else "cpu",
@@ -324,7 +320,8 @@ if __name__ == "__main__":
             print(f"eval_episode={idx}, episodic_return={episodic_return}")
             img = obs_env[idx]
             img = img.transpose(2, 0, 1)  # Reshape the image to (C, H, W) format
-            writer.add_image(f"charts/obs_eval{idx}", img, global_step)
+            if idx % 100 == 0:
+                writer.add_image(f"charts/obs_eval{idx}", img, global_step)
 
     env.close()
     writer.close()
