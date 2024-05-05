@@ -1,177 +1,40 @@
 # docs and experiment results can be found at https://docs.cleanrl.dev/rl-algorithms/ddpg/#ddpg_continuous_actionpy
 import copy
-import os
 import random
 import time
-from dataclasses import dataclass
 
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
-import torch.nn as nn
 import torch.nn.functional as F
 import torch.optim as optim
-import torchvision
 import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
+
+from cleanrl.nn_architectures import Actor, QNetwork
 from custom_env import MedicalImageSegmentationEnv
-from pathlib import Path
-
-
-@dataclass
-class Args:
-    exp_name: str = "Image_Segmentation-ResNet"
-    """the name of this experiment"""
-    seed: int = 1
-    """seed of the experiment"""
-    torch_deterministic: bool = True
-    """if toggled, `torch.backends.cudnn.deterministic=False`"""
-    cuda: bool = True
-    """if toggled, cuda will be enabled by default"""
-    track: bool = False
-    """if toggled, this experiment will be tracked with Weights and Biases"""
-    wandb_project_name: str = "cleanRL"
-    """the wandb's project name"""
-    wandb_entity: str = None
-    """the entity (team) of wandb's project"""
-    save_model: bool = True
-    """whether to save model into the `runs/{run_name}` folder"""
-
-    # Algorithm specific arguments
-    env_id: str = "Image_Segmentation-v1"
-    """the environment id"""
-    total_timesteps: int = int(1e3)
-    """total timesteps of the experiments"""
-    learning_rate: float = 3e-4
-    """the learning rate of the optimizer"""
-    buffer_size: int = int(5e4)
-    """the replay memory buffer size"""
-    gamma: float = 0.99
-    """the discount factor gamma"""
-    tau: float = 0.005
-    """target smoothing coefficient (default: 0.005)"""
-    batch_size: int = 128
-    """the batch size of sample from the reply memory"""
-    exploration_noise: float = 0.1
-    """the scale of exploration noise"""
-    learning_starts: int = int(5e2)
-    """timestep to start learning"""
-    policy_frequency: int = 2
-    """the frequency of training policy (delayed)"""
-    noise_clip: float = 0.5
-    """noise clip parameter of the Target Policy Smoothing Regularization"""
+from hyper_param import Args
 
 
 def make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space):
     def thunk():
         env = MedicalImageSegmentationEnv(data_path, num_control_points, max_iter, iou_threshold, interval_action_space)
         return env
+
     return thunk
 
 
-class ResNetFeatureExtractor(nn.Module):
-    def __init__(self, input_channels):
-        super().__init__()
-        self.resnet = torchvision.models.resnet18(weights=None)
-        self.resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
-        self.resnet.fc = nn.Identity()
-
-    def forward(self, x):
-        return self.resnet(x)
-
-# ALGO LOGIC: initialize agent here:
-class QNetwork(nn.Module):
-    def __init__(self, env):
-        super().__init__()
-        self.feature_extractor = ResNetFeatureExtractor(2)
-        self.fc1 = nn.Linear(512, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc3 = nn.Linear(256, 1)
-
-    def forward(self, x):
-        """
-
-        :param x: the input tensor containing both mask (channel 0) and ground truth (channel 1) data in shape [batch_size, channels=2, height=110, width=110] ; mask and ground truth are binary images [0, 1]
-        :return: the Q value of the input state-action pair in shape [batch_size, 1]
-        """
-        x = x.float()
-        x = self.feature_extractor(x)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = self.fc3(x)
-        return x
-
-
-class Actor(nn.Module):
-    def __init__(self, env):
-        super().__init__()
-        # Assuming env.observation_space.shape is (H, W, C)
-        input_channels = env.observation_space.shape[2] - 1  # Last dimension is channels AND -1 because i only use mask and image and not the ground truth
-        self.feature_extractor = ResNetFeatureExtractor(input_channels)
-        self.fc1 = nn.Linear(512, 256)
-        self.fc2 = nn.Linear(256, 256)
-        self.fc_mu = nn.Linear(256, np.prod(env.action_space.shape))
-
-        # Batch normalization layers for each channel
-        self.bn_image = nn.BatchNorm2d(1)  # BatchNorm for the image channel
-        self.bn_mask = nn.BatchNorm2d(1)   # BatchNorm for the mask channel
-
-        # Action rescaling buffers
-        self.register_buffer(
-            "action_scale", torch.tensor(((env.action_space.high - env.action_space.low) / 2.0).reshape(-1), dtype=torch.float32)
-        )
-        self.register_buffer(
-            "action_bias", torch.tensor(((env.action_space.high + env.action_space.low) / 2.0).reshape(-1), dtype=torch.float32)
-        )
-
-    def forward(self, x):
-        """
-        :param x:  the input tensor containing both image (channel 0) and mask (channel 1) data in shape [batch_size, channels=2, height=110, width=110] ; image is grayscale [0,255] and mask is binary [0, 1]
-        :return: the action parameters to take with the shape [batch_size, action_dim]
-        """
-        x = x.float()
-        image = x[:, 0:1, :, :] / 255.0  # Normalize the image to [0, 1]
-        mask = x[:, 1:2, :, :]
-        image = self.bn_image(image)
-        mask = self.bn_mask(mask)
-
-        x = torch.cat([image, mask], dim=1)
-
-        x = self.feature_extractor(x)
-        x = F.relu(self.fc1(x))
-        x = F.relu(self.fc2(x))
-        x = torch.tanh(self.fc_mu(x)).view(-1, *env.action_space.shape)
-        output = (x.view(-1, np.prod(env.action_space.shape)) * self.action_scale) + self.action_bias
-        return output
-
-
 if __name__ == "__main__":
-    data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
-    num_control_points = 4
-    max_iter = 4
-    iou_threshold = 0.8
-    interval_action_space = 0.15
-
     args = tyro.cli(Args)
-    run_name = f"{args.exp_name}__CP{num_control_points}__AS{interval_action_space}__it{max_iter}__{int(time.time())}"
+    run_name = f"{args.exp_name}__CP{args.num_control_points}__AS{args.interval_action_space}__it{args.max_iter}__{int(time.time())}"
     if args.track:
         import wandb
 
-        wandb.init(
-            project=args.wandb_project_name,
-            entity=args.wandb_entity,
-            sync_tensorboard=True,
-            config=vars(args),
-            name=run_name,
-            monitor_gym=True,
-            save_code=True,
-        )
+        wandb.init(project=args.wandb_project_name, entity=args.wandb_entity, sync_tensorboard=True, config=vars(args),
+                   name=run_name, monitor_gym=True, save_code=True, )
     writer = SummaryWriter(f"runs/{run_name}")
-    writer.add_text(
-        "hyperparameters",
-        "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
-    )
+    writer.add_text("hyperparameters", "|param|value|\n|-|-|\n%s" % (
+        "\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])), )
 
     # TRY NOT TO MODIFY: seeding
     random.seed(args.seed)
@@ -184,7 +47,8 @@ if __name__ == "__main__":
     print(f"Device: {device}")
 
     # env setup
-    env = make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space)()
+    env = make_env(args.data_path, args.num_control_points, args.max_iter, args.iou_threshold,
+                   args.interval_action_space)()
 
     actor = Actor(env).to(device)
     qf1 = QNetwork(env).to(device)
@@ -198,13 +62,8 @@ if __name__ == "__main__":
     # Assuming the input size for both models is (2, 110, 110)
     input_size = (2, 110, 110)
 
-    rb = ReplayBuffer(
-        args.buffer_size,
-        env.observation_space,
-        env.action_space,
-        device,
-        handle_timeout_termination=False,
-    )
+    rb = ReplayBuffer(args.buffer_size, env.observation_space, env.action_space, device,
+                      handle_timeout_termination=False, )
     start_time = time.time()
 
     # Initialize a variable to keep track of the last printed percentage
@@ -221,7 +80,7 @@ if __name__ == "__main__":
             print(f"Script executed at {current_percentage:.0f}%")
             last_printed_percentage = current_percentage
 
-        rnd = True
+        rnd = True  # to track if action came from sample or actor
 
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
@@ -268,7 +127,8 @@ if __name__ == "__main__":
                 temp_qf1 = copy.deepcopy(data.next_observations)
                 temp_qf1 = temp_qf1[:, :, :, [1, 2]].permute(0, 3, 1, 2)
                 qf1_next_target = qf1_target(temp_qf1)
-                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (qf1_next_target).view(-1)
+                next_q_value = data.rewards.flatten() + (1 - data.dones.flatten()) * args.gamma * (
+                    qf1_next_target).view(-1)
 
             temp_qf1_a_values = copy.deepcopy(data.observations)
             temp_qf1_a_values = temp_qf1_a_values[:, :, :, [1, 2]].permute(0, 3, 1, 2)
@@ -307,14 +167,11 @@ if __name__ == "__main__":
 
         from ddpg_eval import evaluate
 
-        episodic_returns, obs_env = evaluate(
-        model_path,
-        make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space),
-        eval_episodes=1000,
-        run_name="eval",
-        Model=(Actor, QNetwork),
-        device="cuda" if torch.cuda.is_available() else "cpu",
-    )
+        episodic_returns, obs_env = evaluate(model_path,
+                                             make_env(args.data_path, args.num_control_points, args.max_iter,
+                                                      args.iou_threshold, args.iou_threshold), eval_episodes=1000,
+                                             run_name="eval", Model=(Actor, QNetwork),
+                                             device="cuda" if torch.cuda.is_available() else "cpu", )
         for idx, episodic_return in enumerate(episodic_returns):
             writer.add_scalar("eval/episodic_return", episodic_return, idx)
             print(f"eval_episode={idx}, episodic_return={episodic_return}")

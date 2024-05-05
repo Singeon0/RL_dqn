@@ -368,9 +368,8 @@ class MedicalImageSegmentationEnv(gym.Env):
 
         iou = np.sum(mask & ground_truth) / np.sum(mask | ground_truth)
         excess = np.sum(mask & ~ground_truth) / np.sum(mask)
-        reward = iou ** 2 - excess ** 2
-        rnd = random.random()
-        return reward  # TODO : change
+        reward = iou - excess  # TODO : room for improvement?
+        return reward
 
 
     def _is_terminated(self):

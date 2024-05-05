@@ -8,7 +8,7 @@ import matplotlib.pyplot as plt
 from cleanrl.custom_env import process_mask
 
 # Load the data
-data_path = "../utah_test_set.h5"
+data_path = "../../medical_data/utah_test_set.h5"
 data = h5py.File(data_path, "r")
 
 images = np.array(data['image'])

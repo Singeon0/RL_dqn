@@ -46,4 +46,4 @@ def create_h5_dataset(base_path, image_size, keep_n):
 
     return
 
-create_h5_dataset('UTAH Test set', image_size=640, keep_n=True)
+create_h5_dataset('../UTAH Test set', image_size=640, keep_n=True)
