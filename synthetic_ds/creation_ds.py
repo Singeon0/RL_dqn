@@ -26,7 +26,7 @@ for i in range(num_images):
     groundtruth_radius = int(circle_radius * 1.33)  # Increase the radius by 10%
     groundtruth_images[i] = cv2.circle(np.zeros(image_size, dtype=np.uint8), circle_center, groundtruth_radius, 1, -1)
 
-    data_images[i] = groundtruth_images[i].astype(np.uint8) * 100 + np.random.normal(0, 3, image_size)
+    data_images[i] = groundtruth_images[i].astype(np.uint8) * 100 # + np.random.normal(0, 3, image_size)
 # Save the images to an HDF5 file
 with h5py.File('synthetic_dataset.h5', 'w') as hdf:
     hdf.create_dataset('image', data=data_images)

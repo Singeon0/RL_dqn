@@ -42,7 +42,7 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Image_Segmentation-v1"
     """the environment id"""
-    total_timesteps: int = int(1e4)
+    total_timesteps: int = int(5e4)
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
@@ -150,7 +150,7 @@ class Actor(nn.Module):
 if __name__ == "__main__":
     data_path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 4
-    max_iter = 1
+    max_iter = 5
     iou_threshold = 0.8
     interval_action_space = 0.25
 
@@ -226,7 +226,7 @@ if __name__ == "__main__":
 
         # ALGO LOGIC: put action logic here
         if global_step < args.learning_starts:
-            action = np.round(env.action_sample(percentage=0.999, interval_action_space=0.15), 4)
+            action = np.round(env.action_sample(percentage=0.05, interval_action_space=0.15), 4)
         else:
             with torch.no_grad():
                 temp = copy.deepcopy(obs)
