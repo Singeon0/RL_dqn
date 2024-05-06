@@ -1,19 +1,15 @@
 import copy
-import warnings
 import random
+import warnings
 
 import gymnasium as gym
-import cv2
-from collections import Counter
-from scipy.ndimage import binary_closing, zoom
-import numpy as np
-import h5py
 import matplotlib.pyplot as plt
-from gymnasium  import spaces
+import numpy as np
+from gymnasium import spaces
 from pygem import FFD
 from sklearn.metrics import jaccard_score
 
-from utils import create_action_matrix, transform_array, process_mask, read_h5_dataset, resize_grayscale_image
+from utils import create_action_matrix, transform_array, process_mask, read_h5_dataset
 
 warnings.filterwarnings("ignore", category=DeprecationWarning)
 

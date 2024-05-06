@@ -5,10 +5,12 @@ import time
 from dataclasses import dataclass
 
 import gymnasium as gym
+import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
 import torch.optim as optim
+import torchvision
 import tyro
 from torch.distributions.normal import Normal
 from torch.utils.tensorboard import SummaryWriter
@@ -23,9 +25,9 @@ class Args:
     """the name of this experiment"""
     data_path: Path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     """Path to the synthetic dataset"""
-    num_control_points: int = 9
+    num_control_points: int = 4
     """Number of control points"""
-    max_iter: int = 2
+    max_iter: int = 1
     """Maximum number of iterations"""
     iou_threshold: float = 0.8
     """Intersection over Union (IoU) threshold"""
@@ -111,36 +113,62 @@ def layer_init(layer, std=np.sqrt(2), bias_const=0.0):
     return layer
 
 
+class ResNetFeatureExtractor(nn.Module):
+    def __init__(self, input_channels):
+        super().__init__()
+        self.resnet = torchvision.models.resnet18(weights=None)
+        self.resnet.conv1 = nn.Conv2d(input_channels, 64, kernel_size=7, stride=2, padding=3, bias=False)
+        self.resnet.fc = nn.Identity()
+
+    def forward(self, x):
+        return self.resnet(x)
+
+
 class Agent(nn.Module):
     def __init__(self, envs):
         super().__init__()
+        self.envs = envs
+        self.feature_extractor = ResNetFeatureExtractor(np.array(envs.single_observation_space.shape)[2])
+
         self.critic = nn.Sequential(
-            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 1), std=1.0),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, 1)
         )
+
         self.actor_mean = nn.Sequential(
-            layer_init(nn.Linear(np.array(envs.single_observation_space.shape).prod(), 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, 64)),
-            nn.Tanh(),
-            layer_init(nn.Linear(64, np.prod(envs.single_action_space.shape)), std=0.01),
+            nn.Linear(512, 256),
+            nn.ReLU(),
+            nn.Linear(256, np.prod(envs.single_action_space.shape)),
+            nn.Tanh()  # Assuming the action space is normalized between -1 and 1
         )
+
         self.actor_logstd = nn.Parameter(torch.zeros(1, np.prod(envs.single_action_space.shape)))
 
     def get_value(self, x):
-        return self.critic(x)
+        x = x.float() / 255.0  # Normalize the image data to [0, 1]
+        x = x.permute(0, 3, 1, 2)  # Permute the dimensions to (batch_size, channels, height, width)
+        features = self.feature_extractor(x)
+        return self.critic(features)
 
     def get_action_and_value(self, x, action=None):
-        action_mean = self.actor_mean(x)
+        x = x.float() / 255.0  # Normalize the image data to [0, 1]
+        x = x.permute(0, 3, 1, 2)  # Permute the dimensions to (batch_size, channels, height, width)
+        features = self.feature_extractor(x)
+
+        action_mean = self.actor_mean(features)
         action_logstd = self.actor_logstd.expand_as(action_mean)
         action_std = torch.exp(action_logstd)
+
         probs = Normal(action_mean, action_std)
         if action is None:
             action = probs.sample()
-        return action, probs.log_prob(action).sum(1), probs.entropy().sum(1), self.critic(x)
+
+        # Reshape the action tensor to match the expected shape
+        action = action.view(x.size(0), self.envs.single_action_space.shape[0], self.envs.single_action_space.shape[1], self.envs.single_action_space.shape[2])
+
+        return action, probs.log_prob(action.view(-1, np.prod(self.envs.single_action_space.shape))).sum(
+            1), probs.entropy().sum(1), self.critic(features)
 
 
 if __name__ == "__main__":
@@ -217,6 +245,8 @@ if __name__ == "__main__":
                 values[step] = value.flatten()
             actions[step] = action
             logprobs[step] = logprob
+
+            print(action)
 
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
