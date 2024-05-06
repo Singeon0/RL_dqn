@@ -15,7 +15,7 @@ warnings.filterwarnings("ignore", category=DeprecationWarning)
 
 
 class MedicalImageSegmentationEnv(gym.Env):
-    def __init__(self, data_path, num_control_points, max_iter, iou_threshold, interval_action_space=0.125):
+    def __init__(self, data_path, num_control_points, max_iter, iou_threshold, interval_action_space=0.125, iou_truncate=0.1):
         super(MedicalImageSegmentationEnv, self).__init__()
 
         # Load all images, initial masks, and ground truths
@@ -34,6 +34,7 @@ class MedicalImageSegmentationEnv(gym.Env):
         self.iteration = 0
         self.max_iterations = max_iter
         self.iou_threshold = iou_threshold
+        self.iou_truncate = iou_truncate
 
         # Initialize the FFD object
         self.ffd = FFD([int(np.sqrt(self.num_control_points)), int(np.sqrt(self.num_control_points)),
@@ -139,9 +140,9 @@ class MedicalImageSegmentationEnv(gym.Env):
         info = {'iteration': self.iteration,
             'iou': self._compute_iou(self.current_mask, self.ground_truths[self.current_index]), }
 
-        # Store the final observation in the info dictionary if the episode is terminated or truncated
-        if terminated or truncated:
-            info['final_observation'] = observation
+        # # Store the final observation in the info dictionary if the episode is terminated or truncated
+        # if terminated or truncated:
+        #     info['final_observation'] = observation
 
         # Return the next observation, reward, done flag, and info
         return observation, reward, terminated, truncated, info
@@ -194,25 +195,19 @@ class MedicalImageSegmentationEnv(gym.Env):
         iou = np.sum(mask & ground_truth) / np.sum(mask | ground_truth)
         excess = np.sum(mask & ~ground_truth) / np.sum(mask)
         reward = iou - excess  # TODO : room for improvement?
-        return reward ** 2
+        return iou
 
 
     def _is_terminated(self):
-        # Calculate the total number of pixels in the current mask and the ground truth
-        total_pixels_mask = np.sum(self.current_mask)
-        total_pixels_ground_truth = np.sum(self.ground_truths[self.current_index])
-
-        # Stop if the number of pixels in the mask is less than x% of the number of pixels in the ground truth
-        if total_pixels_mask < 0.01 * total_pixels_ground_truth:
-            return True
-
         # Check if the desired IoU threshold is achieved
         iou = self._compute_iou(self.current_mask, self.ground_truths[self.current_index])
         return iou >= self.iou_threshold
 
     def _is_truncated(self):
         # Check if the maximum number of iterations is reached
-        return self.iteration >= self.max_iterations
+        # Check if the  IoU lower than the threshold
+        iou = self._compute_iou(self.current_mask, self.ground_truths[self.current_index])
+        return self.iteration >= self.max_iterations or iou <= self.iou_truncate
 
     def _compute_iou(self, mask1, mask2):
         # Flatten the masks to 1D arrays

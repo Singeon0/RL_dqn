@@ -68,7 +68,7 @@ if __name__ == "__main__":
 
     evaluate(
         model_path,
-        make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space),
+        make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space, iou_truncate),
         eval_episodes=25,
         run_name="eval",
         Model=(Actor, QNetwork),

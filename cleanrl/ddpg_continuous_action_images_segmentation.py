@@ -13,12 +13,12 @@ from torch.utils.tensorboard import SummaryWriter
 
 from nn_architectures import Actor, QNetwork
 from custom_env import MedicalImageSegmentationEnv
-from hyper_param import Args
+from hyper_param_ddpg import Args
 
 
-def make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space):
+def make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space, iou_truncate):
     def thunk():
-        env = MedicalImageSegmentationEnv(data_path, num_control_points, max_iter, iou_threshold, interval_action_space)
+        env = MedicalImageSegmentationEnv(data_path, num_control_points, max_iter, iou_threshold, interval_action_space, iou_truncate)
         return env
 
     return thunk

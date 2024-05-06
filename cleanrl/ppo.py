@@ -25,14 +25,16 @@ class Args:
     """the name of this experiment"""
     data_path: Path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     """Path to the synthetic dataset"""
-    num_control_points: int = 4
+    num_control_points: int = 25
     """Number of control points"""
-    max_iter: int = 1
+    max_iter: int = 100
     """Maximum number of iterations"""
     iou_threshold: float = 0.8
     """Intersection over Union (IoU) threshold"""
-    interval_action_space: float = 0.5
+    interval_action_space: float = 0.25
     """Interval of the action space"""
+    iou_truncate: float = 0.1
+    """IoU truncate value"""
     seed: int = 1
     """seed of the experiment"""
     torch_deterministic: bool = True
@@ -57,11 +59,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "HalfCheetah-v4"
     """the id of the environment"""
-    total_timesteps: int = 1000000
+    total_timesteps: int = 1e3
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 1
+    num_envs: int = 10
     """the number of parallel game environments"""
     num_steps: int = 2048
     """the number of steps to run in each environment per policy rollout"""
@@ -99,9 +101,9 @@ class Args:
     """the number of iterations (computed in runtime)"""
 
 
-def make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space):
+def make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space, iou_truncate):
     def thunk():
-        env = MedicalImageSegmentationEnv(data_path, num_control_points, max_iter, iou_threshold, interval_action_space)
+        env = MedicalImageSegmentationEnv(data_path, num_control_points, max_iter, iou_threshold, interval_action_space, iou_truncate)
         return env
 
     return thunk
@@ -205,7 +207,7 @@ if __name__ == "__main__":
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
-        [make_env(args.data_path, args.num_control_points, args.max_iter, args.iou_threshold, args.interval_action_space) for i in range(args.num_envs)]
+        [make_env(args.data_path, args.num_control_points, args.max_iter, args.iou_threshold, args.interval_action_space, args.iou_truncate) for i in range(args.num_envs)]
     )
     assert isinstance(envs.single_action_space, gym.spaces.Box), "only continuous action space is supported"
 
@@ -246,10 +248,10 @@ if __name__ == "__main__":
             actions[step] = action
             logprobs[step] = logprob
 
-            print(action)
-
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
+            # for env in envs.envs:
+            #     env.render()
             next_done = np.logical_or(terminations, truncations)
             rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
