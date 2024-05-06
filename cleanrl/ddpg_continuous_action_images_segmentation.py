@@ -11,7 +11,7 @@ import tyro
 from stable_baselines3.common.buffers import ReplayBuffer
 from torch.utils.tensorboard import SummaryWriter
 
-from cleanrl.nn_architectures import Actor, QNetwork
+from nn_architectures import Actor, QNetwork
 from custom_env import MedicalImageSegmentationEnv
 from hyper_param import Args
 
@@ -58,9 +58,6 @@ if __name__ == "__main__":
     qf1_target.load_state_dict(qf1.state_dict())
     q_optimizer = optim.Adam(list(qf1.parameters()), lr=args.learning_rate)
     actor_optimizer = optim.Adam(list(actor.parameters()), lr=args.learning_rate)
-
-    # Assuming the input size for both models is (2, 110, 110)
-    input_size = (2, 110, 110)
 
     rb = ReplayBuffer(args.buffer_size, env.observation_space, env.action_space, device,
                       handle_timeout_termination=False, )
@@ -122,7 +119,7 @@ if __name__ == "__main__":
             data = rb.sample(args.batch_size)
             with torch.no_grad():
                 temp_actor = copy.deepcopy(data.next_observations)
-                temp_actor = temp_actor[:, :, :, 0:2].permute(0, 3, 1, 2)
+                temp_actor = temp_actor[:, :, :, 0:2].permute(0, 3, 1, 2)  # To have the right shape for torch (batch, channel, height, width)
                 next_state_actions = target_actor(temp_actor)
                 temp_qf1 = copy.deepcopy(data.next_observations)
                 temp_qf1 = temp_qf1[:, :, :, [1, 2]].permute(0, 3, 1, 2)
