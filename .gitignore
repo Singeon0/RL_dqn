@@ -1,6 +1,6 @@
 .venv/
 UTAH Test set/
-cleanrl/utah_test_set.h5
+medical_data/utah_test_set.h5
 .DS_Store
 .idea/
 cleanrl/runs/
