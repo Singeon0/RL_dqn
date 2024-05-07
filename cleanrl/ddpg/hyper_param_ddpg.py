@@ -5,7 +5,7 @@ from pathlib import Path
 @dataclass
 class Args:
     # Algorithm specific arguments
-    data_path: Path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
+    data_path: Path = Path('../..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     """Path to the synthetic dataset"""
     num_control_points: int = 4
     """Number of control points"""

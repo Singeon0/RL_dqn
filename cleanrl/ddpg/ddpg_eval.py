@@ -53,10 +53,10 @@ def evaluate(
 
 
 if __name__ == "__main__":
-    from cleanrl.ddpg_eval import evaluate
-    from cleanrl.ddpg_continuous_action_images_segmentation import Actor, QNetwork, make_env
+    from cleanrl.ddpg.ddpg_eval import evaluate
+    from cleanrl.ddpg.ddpg_continuous_action_images_segmentation import Actor, QNetwork, make_env
 
-    data_path = Path('../cleanrl_utils') / 'synthetic_ds' / 'synthetic_dataset.h5'
+    data_path = Path('../../cleanrl_utils') / 'synthetic_ds' / 'synthetic_dataset.h5'
     num_control_points = 16
     max_iter = 100
     iou_threshold = 0.85

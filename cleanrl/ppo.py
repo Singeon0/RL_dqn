@@ -18,10 +18,7 @@ from pathlib import Path
 from custom_env import MedicalImageSegmentationEnv
 
 import warnings
-
-# Ignore specific warning
-warnings.filterwarnings("ignore", category=DeprecationWarning, module="tensorboard.compat.proto.tensor_pb2")
-
+warnings.filterwarnings("ignore")
 
 @dataclass
 class Args:
@@ -29,13 +26,13 @@ class Args:
     """the name of this experiment"""
     data_path: Path = Path('..') / 'synthetic_ds' / 'synthetic_dataset.h5'
     """Path to the synthetic dataset"""
-    num_control_points: int = 25
+    num_control_points: int = 4
     """Number of control points"""
-    max_iter: int = 10
+    max_iter: int = 100
     """Maximum number of iterations"""
     iou_threshold: float = 0.8
     """Intersection over Union (IoU) threshold"""
-    interval_action_space: float = 0.25
+    interval_action_space: float = 0.15
     """Interval of the action space"""
     iou_truncate: float = 0.1
     """IoU truncate value"""
@@ -53,7 +50,7 @@ class Args:
     """the entity (team) of wandb's project"""
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
-    save_model: bool = False
+    save_model: bool = True
     """whether to save model into the `runs_ppo/{run_name}` folder"""
     upload_model: bool = False
     """whether to upload the saved model to huggingface"""
@@ -63,11 +60,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Seg_PPO-v0"
     """the id of the environment"""
-    total_timesteps: int = 3e3
+    total_timesteps: int = 3e4
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 1
+    num_envs: int = 5
     """the number of parallel game environments"""
     num_steps: int = 512 #2048
     """the number of steps to run in each environment per policy rollout"""
@@ -239,6 +236,7 @@ if __name__ == "__main__":
 
     # TRY NOT TO MODIFY: start the game
     global_step = 0
+    count_improvement_rwd = 0
     start_time = time.time()
     next_obs, _ = envs.reset(seed=args.seed)
     next_obs = torch.Tensor(next_obs).to(device)
@@ -272,8 +270,14 @@ if __name__ == "__main__":
 
             # TRY NOT TO MODIFY: execute the game and log data.
             next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
-            # for env in envs.envs:
-            #     env.render()
+
+            for r in reward:
+                if r > 0.332:
+                    print(f"reward={r}")
+                    count_improvement_rwd += 1
+                    for env in envs.envs:
+                        env.render()
+
             next_done = np.logical_or(terminations, truncations)
             if os.name == 'posix':  # macOS and Linux both return 'posix'
                 rewards[step] = torch.tensor(reward, dtype=torch.float32).to(device).view(-1)
@@ -395,14 +399,13 @@ if __name__ == "__main__":
         episodic_returns = evaluate(
             model_path,
             make_env,
-            args.env_id,
             eval_episodes=100,
-            run_name=f"{run_name}-eval",
             Model=Agent,
             device=device,
-            gamma=args.gamma,
-            args=args
+            args=args,
+            render=False,
         )
+
         for idx, episodic_return in enumerate(episodic_returns):
             writer.add_scalar("eval/episodic_return", episodic_return, idx)
         print(f"average episodic return is {np.mean(episodic_returns)}")

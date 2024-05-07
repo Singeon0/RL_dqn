@@ -3,3 +3,9 @@ cd C:\Users\Shadow\Documents\GitHub\RL_dqn
 .venv\Scripts\activate
 cd cleanrl
 python ppo.py
+
+# FOR MAC
+cd /Users/brownie/GitHub/RL_dqn
+source .venv/bin/activate
+cd cleanrl
+python3 ppo.py

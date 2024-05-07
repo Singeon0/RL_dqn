@@ -1,8 +1,12 @@
+import os
 from typing import Callable
 
 import gymnasium as gym
 import numpy as np
 import torch
+import warnings
+warnings.filterwarnings("ignore")
+
 
 
 def evaluate(
@@ -11,9 +15,20 @@ def evaluate(
     eval_episodes: int,
     Model: torch.nn.Module,
     device: torch.device = torch.device("cpu"),
-    args=None
+    args=None,
+    render: bool = False,
 ):
-    print(device)
+    if os.name == 'posix':  # macOS and Linux both return 'posix'
+        if torch.backends.mps.is_available():
+            device = torch.device("mps")
+            x = torch.ones(1, device=device)
+            print(x)
+        else:
+            print("MPS device not found.")
+    elif os.name == 'nt':  # Windows returns 'nt'
+        device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    else:
+        print("Unknown operating system.")
 
     envs = gym.vector.SyncVectorEnv([make_env(args.data_path, args.num_control_points, args.max_iter, args.iou_threshold, args.interval_action_space, args.iou_truncate)])
     agent = Model(envs).to(device)
@@ -26,19 +41,16 @@ def evaluate(
     while len(episodic_returns) < total_episodes:
         actions, _, _, _ = agent.get_action_and_value(torch.Tensor(obs).to(device))
         next_obs, _, _, _, infos = envs.step(actions.cpu().numpy())
-        for env in envs.envs:
-            env.render()
+        if render:
+            for env in envs.envs:
+                env.render()
         if "final_info" in infos:
-            for info in infos["final_info"]:
-                if "episode" not in info:
-                    continue
-                print(f"eval_episode={len(episodic_returns)}, episodic_return={info['episode']['r']}")
-                episodic_returns += [info["episode"]["r"]]
+                for info in infos["final_info"]:
+                    if "iteration" not in info or "iou" not in info:
+                        continue
+                    print(f"eval_episode={len(episodic_returns)}, iteration={info['iteration']}, iou={info['iou']}")
+                    episodic_returns += [info["iou"]]
         obs = next_obs
-        # for idx, env in enumerate(envs.envs):
-          #  print(f'Env_{idx} iter = ({env.iteration}//{env.max_iterations})\n')
-        # print(f"\n------------------------Progress: {len(episodic_returns)}/{total_episodes} episodes completed------------------------\n")
-
     return episodic_returns
 
 if __name__ == "__main__":
@@ -52,7 +64,7 @@ if __name__ == "__main__":
     cu = True
 
     model_path = Path(
-        "runs_ppo/Seg_PPO-v0__ppo__1__1715019751/ppo.cleanrl_model")
+        "runs_ppo/Seg_PPO-v0__ppo__1__1715081971/ppo.cleanrl_model")
 
     episodic_returns = evaluate(
         model_path,
@@ -60,7 +72,8 @@ if __name__ == "__main__":
         eval_episodes=10,
         Model=Agent,
         device="cuda" if torch.cuda.is_available() and cu else "cpu",
-        args=args
+        args=args,
+        render=True
     )
 
     for idx, episodic_return in enumerate(episodic_returns):
