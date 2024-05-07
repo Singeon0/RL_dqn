@@ -11,6 +11,7 @@ import torch.nn as nn
 import torch.optim as optim
 import torchvision
 import tyro
+from matplotlib import pyplot as plt
 from torch.distributions.normal import Normal
 from torch.utils.tensorboard import SummaryWriter
 from pathlib import Path
@@ -60,11 +61,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Seg_PPO-v0"
     """the id of the environment"""
-    total_timesteps: int = 3e4
+    total_timesteps: int = 5e4
     """total timesteps of the experiments"""
-    learning_rate: float = 3e-4
+    learning_rate: float = 1e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 5
+    num_envs: int = 10
     """the number of parallel game environments"""
     num_steps: int = 512 #2048
     """the number of steps to run in each environment per policy rollout"""
@@ -131,7 +132,7 @@ class Agent(nn.Module):
     def __init__(self, envs):
         super().__init__()
         self.envs = envs
-        self.feature_extractor = ResNetFeatureExtractor(np.array(envs.single_observation_space.shape)[2])
+        self.feature_extractor = ResNetFeatureExtractor(np.array(envs.single_observation_space.shape)[2] - 1)
 
         self.critic = nn.Sequential(
             nn.Linear(512, 256),
@@ -149,14 +150,17 @@ class Agent(nn.Module):
         self.actor_logstd = nn.Parameter(torch.zeros(1, np.prod(envs.single_action_space.shape)))
 
     def get_value(self, x):
-        x = x.float() / 255.0  # Normalize the image data to [0, 1]
+        x = x.float()
         x = x.permute(0, 3, 1, 2)  # Permute the dimensions to (batch_size, channels, height, width)
+        x = x[:, 1:3, :, :]  # Select the mask and ground truth channels
         features = self.feature_extractor(x)
         return self.critic(features)
 
     def get_action_and_value(self, x, action=None):
-        x = x.float() / 255.0  # Normalize the image data to [0, 1]
+        x = x.float()
         x = x.permute(0, 3, 1, 2)  # Permute the dimensions to (batch_size, channels, height, width)
+        x = x[:, 0:2, :, :]  # Select the image and mask channels
+        x[:, 0, :, :] = x[:, 0, :, :] / 255.0  # normalize the first channel (image) by / 255.0
         features = self.feature_extractor(x)
 
         action_mean = self.actor_mean(features)
@@ -237,6 +241,7 @@ if __name__ == "__main__":
     # TRY NOT TO MODIFY: start the game
     global_step = 0
     count_improvement_rwd = 0
+    count_rwd = 0
     start_time = time.time()
     next_obs, _ = envs.reset(seed=args.seed)
     next_obs = torch.Tensor(next_obs).to(device)
@@ -272,11 +277,14 @@ if __name__ == "__main__":
             next_obs, reward, terminations, truncations, infos = envs.step(action.cpu().numpy())
 
             for r in reward:
-                if r > 0.332:
+                count_rwd += 1
+                treshold = 0.4
+                if r > treshold:
                     print(f"reward={r}")
                     count_improvement_rwd += 1
                     for env in envs.envs:
-                        env.render()
+                        if env.rwd() > treshold:
+                            env.render()
 
             next_done = np.logical_or(terminations, truncations)
             if os.name == 'posix':  # macOS and Linux both return 'posix'
@@ -389,6 +397,7 @@ if __name__ == "__main__":
         # show the progress in rounded % of the total iterations
         print(f'--------------------------------{round(iteration / args.num_iterations * 100)}% of the total iterations completed--------------------------------\n')
 
+    print(f'Number of improvements: {count_improvement_rwd} out of {count_rwd} rewards\n')
 
     if args.save_model:
         model_path = f"runs_ppo/{run_name}/{args.exp_name}.cleanrl_model"

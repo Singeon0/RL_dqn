@@ -185,9 +185,11 @@ class MedicalImageSegmentationEnv(gym.Env):
         ground_truth = self.ground_truths[self.current_index]
 
         iou = np.sum(mask & ground_truth) / np.sum(mask | ground_truth)
-        # excess = np.sum(mask & ~ground_truth) / np.sum(mask)
-        # reward = iou - excess  # TODO : room for improvement?
-        return iou ** 2
+        excess = np.sum(mask & ~ground_truth) / np.sum(mask)
+        reward = iou - excess  # TODO : room for improvement?
+        if reward < 0:
+            reward = 0
+        return reward ** 2
 
 
     def _is_terminated(self):
@@ -260,3 +262,6 @@ class MedicalImageSegmentationEnv(gym.Env):
             rgb_array = np.dstack((mri_image_intensity, ground_truth_intensity, current_mask_intensity))
 
             return rgb_array
+
+        def rwd(self):
+            return self._compute_reward()
