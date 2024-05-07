@@ -61,11 +61,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Seg_PPO-v0"
     """the id of the environment"""
-    total_timesteps: int = 1e5
+    total_timesteps: int = 1e6
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 100
+    num_envs: int = 10
     """the number of parallel game environments"""
     num_steps: int = 2048
     """the number of steps to run in each environment per policy rollout"""
