@@ -17,6 +17,11 @@ from pathlib import Path
 
 from custom_env import MedicalImageSegmentationEnv
 
+import warnings
+
+# Ignore specific warning
+warnings.filterwarnings("ignore", category=DeprecationWarning, module="tensorboard.compat.proto.tensor_pb2")
+
 
 @dataclass
 class Args:
@@ -26,7 +31,7 @@ class Args:
     """Path to the synthetic dataset"""
     num_control_points: int = 25
     """Number of control points"""
-    max_iter: int = 100
+    max_iter: int = 10
     """Maximum number of iterations"""
     iou_threshold: float = 0.8
     """Intersection over Union (IoU) threshold"""
@@ -58,11 +63,11 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Seg_PPO-v0"
     """the id of the environment"""
-    total_timesteps: int = 3e4
+    total_timesteps: int = 3e3
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 5
+    num_envs: int = 1
     """the number of parallel game environments"""
     num_steps: int = 512 #2048
     """the number of steps to run in each environment per policy rollout"""
@@ -203,8 +208,17 @@ if __name__ == "__main__":
     torch.manual_seed(args.seed)
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
-    device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
-    print(f"using {device}")
+    if os.name == 'posix':  # macOS and Linux both return 'posix'
+        if torch.backends.mps.is_available():
+            device = torch.device("mps")
+            x = torch.ones(1, device=device)
+            print(x)
+        else:
+            print("MPS device not found.")
+    elif os.name == 'nt':  # Windows returns 'nt'
+        device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    else:
+        print("Unknown operating system.")
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
@@ -234,10 +248,6 @@ if __name__ == "__main__":
 
     for iteration in range(1, args.num_iterations + 1):
 
-        if iteration % 10 == 0:
-            # show the progress in rounded % of the total iterations
-            print(f'{round(iteration / args.num_iterations * 100)}% of the total iterations completed\n')
-
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
@@ -245,6 +255,10 @@ if __name__ == "__main__":
             optimizer.param_groups[0]["lr"] = lrnow
 
         for step in range(0, args.num_steps):
+            if step % 1000 == 0:
+                # show the progress in rounded % of the total steps
+                print(f'{round(step / args.num_steps * 100)}% of the total steps completed for iteration {iteration}')
+
             global_step += args.num_envs
             obs[step] = next_obs
             dones[step] = next_done
@@ -261,15 +275,18 @@ if __name__ == "__main__":
             # for env in envs.envs:
             #     env.render()
             next_done = np.logical_or(terminations, truncations)
-            rewards[step] = torch.tensor(reward).to(device).view(-1)
+            if os.name == 'posix':  # macOS and Linux both return 'posix'
+                rewards[step] = torch.tensor(reward, dtype=torch.float32).to(device).view(-1)
+            else:
+                rewards[step] = torch.tensor(reward).to(device).view(-1)
             next_obs, next_done = torch.Tensor(next_obs).to(device), torch.Tensor(next_done).to(device)
 
             if "final_info" in infos:
                 for info in infos["final_info"]:
-                    if info and "episode" in info:
-                        print(f"global_step={global_step}, episodic_return={info['episode']['r']}")
-                        writer.add_scalar("charts/episodic_return", info["episode"]["r"], global_step)
-                        writer.add_scalar("charts/episodic_length", info["episode"]["l"], global_step)
+                    if info and "iteration" in info and "iou" in info:
+                        # print(f"global_step={global_step}, iteration={info['iteration']}, iou={info['iou']}")
+                        writer.add_scalar("charts/iteration", info["iteration"], global_step)
+                        writer.add_scalar("charts/iou", info["iou"], global_step)
 
         # bootstrap value if not done
         with torch.no_grad():
@@ -364,6 +381,10 @@ if __name__ == "__main__":
         writer.add_scalar("losses/explained_variance", explained_var, global_step)
         print("SPS:", int(global_step / (time.time() - start_time)))
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
+
+        # show the progress in rounded % of the total iterations
+        print(f'--------------------------------{round(iteration / args.num_iterations * 100)}% of the total iterations completed--------------------------------\n')
+
 
     if args.save_model:
         model_path = f"runs_ppo/{run_name}/{args.exp_name}.cleanrl_model"

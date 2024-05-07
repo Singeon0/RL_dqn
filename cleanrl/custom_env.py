@@ -136,10 +136,6 @@ class MedicalImageSegmentationEnv(gym.Env):
         info = {'iteration': self.iteration,
             'iou': self._compute_iou(self.current_mask, self.ground_truths[self.current_index]), }
 
-        # # Store the final observation in the info dictionary if the episode is terminated or truncated
-        # if terminated or truncated:
-        #     info['final_observation'] = observation
-
         # Return the next observation, reward, done flag, and info
         return observation, reward, terminated, truncated, info
 
