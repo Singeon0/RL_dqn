@@ -61,13 +61,13 @@ class Args:
     # Algorithm specific arguments
     env_id: str = "Seg_PPO-v0"
     """the id of the environment"""
-    total_timesteps: int = 5e4
+    total_timesteps: int = 1e5
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 20
+    num_envs: int = 100
     """the number of parallel game environments"""
-    num_steps: int = 512
+    num_steps: int = 2048
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
     """Toggle learning rate annealing for policy and value networks"""
@@ -278,13 +278,15 @@ if __name__ == "__main__":
 
             for r in reward:
                 count_rwd += 1
-                treshold = 0.4
+                treshold = 0.5
                 if r > treshold:
                     print(f"reward={r}")
                     count_improvement_rwd += 1
                     for env in envs.envs:
                         if env.rwd() > treshold:
-                            env.render()
+                            img = env.render(mode='rgb_array')
+                            img = img.transpose(2, 0, 1)  # Reshape the image to (C, H, W) format
+                            writer.add_image(f"charts/obs_eval_{iter}_rwd={env.rwd()}", img, global_step)
 
             next_done = np.logical_or(terminations, truncations)
             if os.name == 'posix':  # macOS and Linux both return 'posix'
@@ -395,6 +397,14 @@ if __name__ == "__main__":
 
         # show the progress in rounded % of the total iterations
         print(f'--------------------------------{round(iteration / args.num_iterations * 100)}% of the total iterations completed--------------------------------\n')
+
+        # display the time needed for an iteration
+        end_time = time.time()
+        execution_time = end_time - start_time  # Time in seconds
+        hours = execution_time // 3600
+        minutes = (execution_time % 3600) // 60
+        seconds = (execution_time % 3600) % 60
+        print(f"Execution time for iteration {iteration}: {int(hours)}:{int(minutes)}:{int(seconds)}\n")
 
     print(f'Number of improvements: {count_improvement_rwd} out of {count_rwd} rewards\n')
 
