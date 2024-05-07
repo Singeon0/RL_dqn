@@ -63,11 +63,11 @@ class Args:
     """the id of the environment"""
     total_timesteps: int = 5e4
     """total timesteps of the experiments"""
-    learning_rate: float = 1e-4
+    learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 10
+    num_envs: int = 20
     """the number of parallel game environments"""
-    num_steps: int = 512 #2048
+    num_steps: int = 512
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
     """Toggle learning rate annealing for policy and value networks"""
@@ -332,7 +332,6 @@ if __name__ == "__main__":
             for start in range(0, args.batch_size, args.minibatch_size):
                 end = start + args.minibatch_size
                 mb_inds = b_inds[start:end]
-
                 _, newlogprob, entropy, newvalue = agent.get_action_and_value(b_obs[mb_inds], b_actions[mb_inds])
                 logratio = newlogprob - b_logprobs[mb_inds]
                 ratio = logratio.exp()

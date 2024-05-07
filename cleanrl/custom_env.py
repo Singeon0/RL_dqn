@@ -189,7 +189,7 @@ class MedicalImageSegmentationEnv(gym.Env):
         reward = iou - excess  # TODO : room for improvement?
         if reward < 0:
             reward = 0
-        return reward ** 2
+        return iou ** 2
 
 
     def _is_terminated(self):
@@ -263,5 +263,5 @@ class MedicalImageSegmentationEnv(gym.Env):
 
             return rgb_array
 
-        def rwd(self):
+    def rwd(self):
             return self._compute_reward()
