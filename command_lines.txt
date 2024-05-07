@@ -2,4 +2,4 @@
 cd C:\Users\Shadow\Documents\GitHub\RL_dqn
 .venv\Scripts\activate
 cd cleanrl
-python ddpg_continuous_action_images_segmentation.py
+python ppo.py

@@ -61,12 +61,13 @@ if __name__ == "__main__":
     max_iter = 100
     iou_threshold = 0.85
     interval_action_space = 0.25
+    iou_truncate = 0.1
 
     model_path = Path(
         "runs/ddpg_continuous_action_images_segmentation__1__1714473083/ddpg_continuous_action_images_segmentation"
         ".cleanrl_model")
 
-    evaluate(
+    episodic_returns = evaluate(
         model_path,
         make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space, iou_truncate),
         eval_episodes=25,
@@ -74,3 +75,4 @@ if __name__ == "__main__":
         Model=(Actor, QNetwork),
         device="cpu",
     )
+

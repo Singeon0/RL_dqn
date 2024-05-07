@@ -56,10 +56,6 @@ class MedicalImageSegmentationEnv(gym.Env):
                                             shape=(self.mri_images[0].shape[0], self.mri_images[0].shape[0], 3),  # Change the 1 to 3 bc the observation is composed of image, mask and ground truth
                                             dtype=np.float32)
 
-        print(f"Observation space shape: {self.observation_space.shape}")
-        print(f"Action space shape: {self.action_space.shape}")
-
-
     def action_sample(self, percentage=0.05, interval_action_space=0.125):
         """
         Randomly sample an action from the action space, with a small chance of expanding the mask.
@@ -193,9 +189,9 @@ class MedicalImageSegmentationEnv(gym.Env):
         ground_truth = self.ground_truths[self.current_index]
 
         iou = np.sum(mask & ground_truth) / np.sum(mask | ground_truth)
-        excess = np.sum(mask & ~ground_truth) / np.sum(mask)
-        reward = iou - excess  # TODO : room for improvement?
-        return iou
+        # excess = np.sum(mask & ~ground_truth) / np.sum(mask)
+        # reward = iou - excess  # TODO : room for improvement?
+        return iou ** 2
 
 
     def _is_terminated(self):

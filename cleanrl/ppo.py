@@ -5,7 +5,6 @@ import time
 from dataclasses import dataclass
 
 import gymnasium as gym
-import matplotlib.pyplot as plt
 import numpy as np
 import torch
 import torch.nn as nn
@@ -50,22 +49,22 @@ class Args:
     capture_video: bool = False
     """whether to capture videos of the agent performances (check out `videos` folder)"""
     save_model: bool = False
-    """whether to save model into the `runs/{run_name}` folder"""
+    """whether to save model into the `runs_ppo/{run_name}` folder"""
     upload_model: bool = False
     """whether to upload the saved model to huggingface"""
     hf_entity: str = ""
     """the user or org name of the model repository from the Hugging Face Hub"""
 
     # Algorithm specific arguments
-    env_id: str = "HalfCheetah-v4"
+    env_id: str = "Seg_PPO-v0"
     """the id of the environment"""
-    total_timesteps: int = 1e3
+    total_timesteps: int = 3e4
     """total timesteps of the experiments"""
     learning_rate: float = 3e-4
     """the learning rate of the optimizer"""
-    num_envs: int = 10
+    num_envs: int = 5
     """the number of parallel game environments"""
-    num_steps: int = 2048
+    num_steps: int = 512 #2048
     """the number of steps to run in each environment per policy rollout"""
     anneal_lr: bool = True
     """Toggle learning rate annealing for policy and value networks"""
@@ -174,10 +173,11 @@ class Agent(nn.Module):
 
 
 if __name__ == "__main__":
+    start_time = time.time()
     args = tyro.cli(Args)
     args.batch_size = int(args.num_envs * args.num_steps)
     args.minibatch_size = int(args.batch_size // args.num_minibatches)
-    args.num_iterations = args.total_timesteps // args.batch_size
+    args.num_iterations = int(args.total_timesteps // args.batch_size)
     run_name = f"{args.env_id}__{args.exp_name}__{args.seed}__{int(time.time())}"
     if args.track:
         import wandb
@@ -191,7 +191,7 @@ if __name__ == "__main__":
             monitor_gym=True,
             save_code=True,
         )
-    writer = SummaryWriter(f"runs/{run_name}")
+    writer = SummaryWriter(f"runs_ppo/{run_name}")
     writer.add_text(
         "hyperparameters",
         "|param|value|\n|-|-|\n%s" % ("\n".join([f"|{key}|{value}|" for key, value in vars(args).items()])),
@@ -204,6 +204,7 @@ if __name__ == "__main__":
     torch.backends.cudnn.deterministic = args.torch_deterministic
 
     device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+    print(f"using {device}")
 
     # env setup
     envs = gym.vector.SyncVectorEnv(
@@ -229,7 +230,14 @@ if __name__ == "__main__":
     next_obs = torch.Tensor(next_obs).to(device)
     next_done = torch.zeros(args.num_envs).to(device)
 
+    print(f'Number of iterations: {args.num_iterations}\n')
+
     for iteration in range(1, args.num_iterations + 1):
+
+        if iteration % 10 == 0:
+            # show the progress in rounded % of the total iterations
+            print(f'{round(iteration / args.num_iterations * 100)}% of the total iterations completed\n')
+
         # Annealing the rate if instructed to do so.
         if args.anneal_lr:
             frac = 1.0 - (iteration - 1.0) / args.num_iterations
@@ -358,30 +366,33 @@ if __name__ == "__main__":
         writer.add_scalar("charts/SPS", int(global_step / (time.time() - start_time)), global_step)
 
     if args.save_model:
-        model_path = f"runs/{run_name}/{args.exp_name}.cleanrl_model"
+        model_path = f"runs_ppo/{run_name}/{args.exp_name}.cleanrl_model"
         torch.save(agent.state_dict(), model_path)
         print(f"model saved to {model_path}")
-        from cleanrl_utils.evals.ppo_eval import evaluate
+        from ppo_eval import evaluate
 
         episodic_returns = evaluate(
             model_path,
             make_env,
             args.env_id,
-            eval_episodes=10,
+            eval_episodes=100,
             run_name=f"{run_name}-eval",
             Model=Agent,
             device=device,
             gamma=args.gamma,
+            args=args
         )
         for idx, episodic_return in enumerate(episodic_returns):
             writer.add_scalar("eval/episodic_return", episodic_return, idx)
-
-        if args.upload_model:
-            from cleanrl_utils.huggingface import push_to_hub
-
-            repo_name = f"{args.env_id}-{args.exp_name}-seed{args.seed}"
-            repo_id = f"{args.hf_entity}/{repo_name}" if args.hf_entity else repo_name
-            push_to_hub(args, episodic_returns, repo_id, "PPO", f"runs/{run_name}", f"videos/{run_name}-eval")
+        print(f"average episodic return is {np.mean(episodic_returns)}")
 
     envs.close()
     writer.close()
+
+    end_time = time.time()
+    execution_time = end_time - start_time  # Time in seconds
+    hours = execution_time // 3600
+    minutes = (execution_time % 3600) // 60
+    seconds = (execution_time % 3600) % 60
+    print(f"Execution time: {int(hours)}:{int(minutes)}:{int(seconds)}")
+

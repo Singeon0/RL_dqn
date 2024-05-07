@@ -12,3 +12,4 @@ synthetic_ds/synthetic_dataset.h5
 /runs
 cleanrl_utils/evals/__pycache__/ddpg_eval.cpython-39.pyc
 medical_data/utah_test_set.h5
+/cleanrl/runs_ppo
