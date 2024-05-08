@@ -65,8 +65,8 @@ tenacity==8.2.3
 tensorboard
 tensorboard-data-server
 tensorboard-plugin-wit
-torch=2.1.2
-torchvision=0.16
+torch==2.1.2
+torchvision==0.16
 tqdm==4.65.0
 typing-extensions==4.6.0
 tyro==0.5.10
