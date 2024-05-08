@@ -14,8 +14,8 @@ def evaluate(
     make_env: Callable,
     eval_episodes: int,
     Model: torch.nn.Module,
+    data_path, num_control_points, max_iter, iou_threshold, interval_action_space, iou_truncate,
     device: torch.device = torch.device("cpu"),
-    args=None,
     render: bool = False,
 ):
     if os.name == 'posix':  # macOS and Linux both return 'posix'
@@ -26,11 +26,11 @@ def evaluate(
         else:
             print("MPS device not found.")
     elif os.name == 'nt':  # Windows returns 'nt'
-        device = torch.device("cuda" if torch.cuda.is_available() and args.cuda else "cpu")
+        device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
     else:
         print("Unknown operating system.")
 
-    envs = gym.vector.SyncVectorEnv([make_env(args.data_path, args.num_control_points, args.max_iter, args.iou_threshold, args.interval_action_space, args.iou_truncate)])
+    envs = gym.vector.SyncVectorEnv([make_env(data_path, num_control_points, max_iter, iou_threshold, interval_action_space, iou_truncate)])
     agent = Model(envs).to(device)
     agent.load_state_dict(torch.load(model_path, map_location=device))
     agent.eval()
