@@ -62,10 +62,10 @@ six==1.16.0
 smmap==5.0.0
 stable-baselines3==2.0.0
 tenacity==8.2.3
-tensorboard==2.15.0
-tensorboard-data-server==0.6.1
-tensorboard-plugin-wit==1.8.1
-torch==2.2.1
+tensorboard
+tensorboard-data-server
+tensorboard-plugin-wit
+torch
 tqdm==4.65.0
 typing-extensions==4.6.0
 tyro==0.5.10
