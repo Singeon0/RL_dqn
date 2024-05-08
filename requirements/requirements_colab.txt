@@ -65,7 +65,8 @@ tenacity==8.2.3
 tensorboard
 tensorboard-data-server
 tensorboard-plugin-wit
-torch
+torch=2.1.2
+torchvision=0.16
 tqdm==4.65.0
 typing-extensions==4.6.0
 tyro==0.5.10
@@ -78,5 +79,3 @@ opencv-python
 scikit-learn
 h5py
 pathlib
-torchvision
-### pip3 install torch torchvision torchaudio --index-url https://download.pytorch.org/whl/cu118
